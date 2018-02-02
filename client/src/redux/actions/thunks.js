@@ -1,6 +1,6 @@
 import { ENTITY_KEY } from '../../common/app-const';
 import { loadEntity } from 'redux-entity';
-import ExampleDomainService from '../../services/domain/example-domain-service';
+import ExampleDomainService from '../../services/domain/EthereumService';
 
 /**
  * Thunk action that simulates a delayed API call

@@ -78,12 +78,11 @@ const config = {
 if (NodeUtils.isProduction()) {
     config.entry = './src/Bootstrap';
     config.plugins.push(new UglifyJSPlugin());
-
 } else {
     config.devtool = 'eval';
     config.entry = [
         'react-hot-loader/patch',
-        `webpack-dev-server/client?http://localhost:${appConfig.example.port}`,
+        `webpack-dev-server/client?http://localhost:${appConfig.appConfig.port}`,
         'webpack/hot/only-dev-server',
         './src/Bootstrap'
     ];

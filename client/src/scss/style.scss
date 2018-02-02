@@ -1,7 +1,15 @@
-@import '../../node_modules/bulma/css/bulma.css';
-@import 'common';
+@import "../../node_modules/bulma/sass/utilities/initial-variables";
+@import "../../node_modules/bulma/sass/utilities/functions";
 
-body, html {
+$body-color: "whitesmoke";
+$body-background-color: #363636;
+$footer-background-color: #363636;
+
+@import "../../node_modules/bulma/bulma";
+@import "common";
+
+body,
+html {
   @include full-height;
   @include margin(0px);
   font: $font-stack;
@@ -14,4 +22,28 @@ body, html {
 
 .full-height {
   @include full-height;
+}
+
+.m-left--small {
+  margin-left: 0.5rem;
+}
+
+.m-right--small {
+  margin-right: 0.5rem;
+}
+
+.m--small {
+  margin: 0.5rem;
+}
+
+.m-left--large {
+  margin-left: 1rem;
+}
+
+.m-right--large {
+  margin-right: 1rem;
+}
+
+.m-large {
+  margin: 1rem;
 }

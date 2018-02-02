@@ -3,10 +3,10 @@
 const config = require('./config/config');
 const NodeService = require('./src/services/common/node-service');
 
-const { example } = config;
-if (!example) throw new Error('configuration cannot be null/undefined');
+const { appConfig } = config;
+if (!appConfig) throw new Error('configuration cannot be null/undefined');
 
-const PORT = example.port;
+const PORT = appConfig.port;
 
 if (NodeService.isProduction()) {
     const express = require('express');

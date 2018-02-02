@@ -21,12 +21,12 @@ module.exports = {
         }
     },
     getPort () {
-        return this.getRequiredProperty('example.port');
+        return this.getRequiredProperty('appConfig.port');
     },
     getBasePath () {
-        return this.getRequiredProperty('example.basePath');
+        return this.getRequiredProperty('appConfig.basePath');
     },
     getBaseUrl () {
-        return this.getRequiredProperty('example.baseUrl');
+        return this.getRequiredProperty('appConfig.baseUrl');
     }
 };
