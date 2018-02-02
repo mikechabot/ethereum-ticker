@@ -1,8 +1,10 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import Icon from '../Icon';
 
 function Hero ({
     icon,
+    iconPrefix,
     theme,
     title,
     subtitle
@@ -16,7 +18,7 @@ function Hero ({
                             icon
                                 ? (
                                     <span>
-                                        <i className="fa fa-chart-line" />&nbsp;
+                                        <Icon icon={icon} prefix={iconPrefix} />&nbsp;
                                     </span>
                                 )
                                 : null

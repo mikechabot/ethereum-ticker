@@ -3,9 +3,11 @@ import PropTypes from 'prop-types';
 
 function Icon ({
     icon,
+    prefix,
     className
 }) {
-    return (<i className={`fa fa-${icon} ${className || ''}`} />);
+    let iconPrefix = prefix || 'fa';
+    return (<i className={`${iconPrefix} fa-${icon} ${className || ''}`} />);
 }
 
 Icon.propTypes = {

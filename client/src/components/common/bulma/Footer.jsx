@@ -8,7 +8,7 @@ function Footer () {
                 <div className="content has-text-centered">
                     <p>
                         <strong className="has-text-grey-light">
-                            <Icon icon="chart-line" />
+                            <Icon icon="ethereum" prefix="fab" />
                             &nbsp;Ethereum Ticker
                         </strong> by <a href="https://www.npmjs.com/~mikechabot">Mike Chabot</a> and Greg LaTouf.
                         <br />
