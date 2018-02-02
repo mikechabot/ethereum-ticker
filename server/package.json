@@ -1,0 +1,47 @@
+{
+  "name": "ethererum-ticker-server",
+  "version": "0.0.1",
+  "description": "REST API for ethereum-ticker-ui",
+  "scripts": {
+    "start": "npm run clear && npm run build && npm run server",
+    "build": "babel src -d lib",
+    "server": "node server.js",
+    "clear": "rm -rf ./lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikechabot/ethereum-ticker.git"
+  },
+  "author": "Mike Chabot",
+  "license": "See license in LICENSE",
+  "bugs": {
+    "url": "https://github.com/mikechabot/ethereum-ticker/issues"
+  },
+  "homepage": "https://github.com/mikechabot/ethereum-ticker#readme",
+  "dependencies": {
+    "axios": "^0.16.2",
+    "babel-cli": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1",
+    "body-parser": "^1.15.2",
+    "cookie-parser": "^1.4.3",
+    "cors": "^2.8.0",
+    "cross-env": "^2.0.0",
+    "express": "^4.14.0",
+    "https": "^1.0.0",
+    "lodash": "^4.17.4",
+    "log4js": "^2.3.3",
+    "maybe-baby": "^0.1.0",
+    "moment": "^2.18.1",
+    "mongodb": "^2.2.8",
+    "mongoose": "^4.11.7",
+    "morgan": "^1.9.0",
+    "node-uuid": "^1.4.7"
+  },
+  "devDependencies": {
+    "eslint": "^3.18.0",
+    "eslint-config-standard": "^7.1.0",
+    "eslint-loader": "^1.7.0",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-standard": "^2.1.1"
+  }
+}
