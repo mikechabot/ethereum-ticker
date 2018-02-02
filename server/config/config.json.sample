@@ -2,6 +2,6 @@
   "port": 3020,
   "mongoUrl": "",
   "logFilePath": "",
-  "sslSecret": "",
-  "whitelist": []
+  "apiToken" "",
+  maxRequestsPerHour: 200
 }
