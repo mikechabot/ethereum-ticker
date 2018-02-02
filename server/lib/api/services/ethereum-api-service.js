@@ -22,7 +22,10 @@ var _logger2 = _interopRequireDefault(_logger);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var model = _mongooseService2.default.MODELS.ETH_BLOCKCHAIN;
+function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
+var blockchainModel = _mongooseService2.default.MODELS.ETH_BLOCKCHAIN;
+var priceModel = _mongooseService2.default.MODELS.ETH_PRICE;
 
 /**
  * https://www.blockcypher.com/dev/bitcoin/#rate-limits-and-tokens
@@ -38,16 +41,32 @@ var EthereumAPIService = svc = {
     getBlockchainInfo: function getBlockchainInfo() {
         return _dataAccessService2.default.get('https://api.blockcypher.com/v1/eth/main?token=' + API_TOKEN);
     },
+    getEthereumPriceInfo: function getEthereumPriceInfo() {
+        return _dataAccessService2.default.get('https://api.coinmarketcap.com/v1/ticker/ethereum/');
+    },
     saveBlockChainInfo: function saveBlockChainInfo() {
         return new Promise(function (resolve, reject) {
-            svc.getBlockchainInfo().then(function (data) {
-                return _mongooseService2.default.saveNewObject(model, data);
-            }).then(function (result) {
-                _logger2.default.info('Polled blockchain', JSON.stringify(result));
+            Promise.all([svc.getBlockchainInfo(), svc.getEthereumPriceInfo()]).then(function (values) {
+                Promise.all([_mongooseService2.default.saveNewObject(blockchainModel, values[0]), _mongooseService2.default.saveNewObject(priceModel, values[1][0])]).then(function (results) {
+                    _logger2.default.info('Polled blockchain', JSON.stringify(results));
+                    resolve(results);
+                });
             }).catch(function (error) {
                 _logger2.default.error(error);
                 reject(error);
             });
+        });
+    },
+    getLatestBlockchainInfo: function getLatestBlockchainInfo() {
+        return _mongooseService2.default.find(blockchainModel, {
+            limit: 1,
+            sort: _defineProperty({}, _mongooseService2.default.DOMAIN_PROPERTY.ID, -1)
+        });
+    },
+    getLatestPriceInfo: function getLatestPriceInfo() {
+        return _mongooseService2.default.find(priceModel, {
+            limit: 1,
+            sort: _defineProperty({}, _mongooseService2.default.DOMAIN_PROPERTY.ID, -1)
         });
     },
     startPolling: function startPolling() {

@@ -29,6 +29,9 @@ exports.default = {
     getLogFilePath: function getLogFilePath() {
         return instance.getRequiredProperty('logFilePath');
     },
+    getWhitelist: function getWhitelist() {
+        return instance.getRequiredProperty('whitelist');
+    },
     getMaxRequestsPerHour: function getMaxRequestsPerHour() {
         return instance.getRequiredProperty('maxRequestsPerHour');
     },

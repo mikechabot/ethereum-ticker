@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import cors from 'cors';
 import mongoose from 'mongoose';
 import morgan from 'morgan';
 import bodyParser from 'body-parser';
@@ -93,6 +94,20 @@ const StartupService = {
             application.use(morgan('combined', {
                 stream: { write: str => logger.info(str) }
             }));
+
+            const whitelist = ConfigService.getWhitelist();
+
+            const corsInstance = cors({
+                origin: (origin, callback) => {
+                    if (!origin || whitelist.indexOf(origin) !== -1) {
+                        callback(null, true);
+                    } else {
+                        callback(new Error('Not allowed by CORS'));
+                    }
+                }
+            });
+
+            application.use(corsInstance);
 
             application.disable('X-Powered-By');
             application.set('etag', false);

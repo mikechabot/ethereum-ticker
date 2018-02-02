@@ -8,6 +8,10 @@ var _http = require('http');
 
 var _http2 = _interopRequireDefault(_http);
 
+var _cors = require('cors');
+
+var _cors2 = _interopRequireDefault(_cors);
+
 var _mongoose = require('mongoose');
 
 var _mongoose2 = _interopRequireDefault(_mongoose);
@@ -113,6 +117,20 @@ var StartupService = {
                         return _logger2.default.info(str);
                     } }
             }));
+
+            var whitelist = _configService2.default.getWhitelist();
+
+            var corsInstance = (0, _cors2.default)({
+                origin: function origin(_origin, callback) {
+                    if (!_origin || whitelist.indexOf(_origin) !== -1) {
+                        callback(null, true);
+                    } else {
+                        callback(new Error('Not allowed by CORS'));
+                    }
+                }
+            });
+
+            application.use(corsInstance);
 
             application.disable('X-Powered-By');
             application.set('etag', false);

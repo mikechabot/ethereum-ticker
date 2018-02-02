@@ -18,6 +18,9 @@ export default {
     getLogFilePath () {
         return instance.getRequiredProperty('logFilePath');
     },
+    getWhitelist () {
+        return instance.getRequiredProperty('whitelist');
+    },
     getMaxRequestsPerHour () {
         return instance.getRequiredProperty('maxRequestsPerHour');
     },

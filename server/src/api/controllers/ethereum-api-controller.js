@@ -1,10 +1,16 @@
 import EthereumAPIService from '../services/ethereum-api-service';
 
 const EthereumAPIController = {
-    handleGetBlockchainInfo (request, response, next) {
+    handleGetLatestBlockchainInfo (request, response, next) {
         EthereumAPIService
-            .getBlockchainInfo()
-            .then(data => response.json(data))
+            .getLatestBlockchainInfo()
+            .then(data => response.json(data[0]))
+            .catch(error => next(error));
+    },
+    handleGetLatestPriceInfo (request, response, next) {
+        EthereumAPIService
+            .getLatestPriceInfo()
+            .then(data => response.json(data[0]))
             .catch(error => next(error));
     }
 };

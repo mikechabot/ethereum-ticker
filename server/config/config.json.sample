@@ -3,5 +3,6 @@
   "mongoUrl": "",
   "logFilePath": "",
   "apiToken" "",
-  maxRequestsPerHour: 200
+  "maxRequestsPerHour": 200,
+  "whitelist": []
 }

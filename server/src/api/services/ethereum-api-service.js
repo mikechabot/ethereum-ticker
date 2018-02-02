@@ -3,7 +3,8 @@ import MongooseService from '../../services/mongoose-service';
 import ConfigService from '../../services/config-service';
 import logger from '../../logger/logger';
 
-const model = MongooseService.MODELS.ETH_BLOCKCHAIN;
+const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
+const priceModel = MongooseService.MODELS.ETH_PRICE;
 
 /**
  * https://www.blockcypher.com/dev/bitcoin/#rate-limits-and-tokens
@@ -19,18 +20,45 @@ const EthereumAPIService = svc = {
     getBlockchainInfo () {
         return DataAccessService.get(`https://api.blockcypher.com/v1/eth/main?token=${API_TOKEN}`);
     },
+    getEthereumPriceInfo () {
+        return DataAccessService.get('https://api.coinmarketcap.com/v1/ticker/ethereum/');
+    },
     saveBlockChainInfo () {
         return new Promise((resolve, reject) => {
-            svc
-                .getBlockchainInfo()
-                .then(data => MongooseService.saveNewObject(model, data))
-                .then(result => {
-                    logger.info('Polled blockchain', JSON.stringify(result));
+            Promise.all([
+                svc.getBlockchainInfo(),
+                svc.getEthereumPriceInfo()
+            ])
+                .then(values => {
+                    Promise.all([
+                        MongooseService.saveNewObject(blockchainModel, values[0]),
+                        MongooseService.saveNewObject(priceModel, values[1][0])
+                    ])
+                        .then(results => {
+                            logger.info('Polled blockchain', JSON.stringify(results));
+                            resolve(results);
+                        });
                 })
                 .catch(error => {
                     logger.error(error);
                     reject(error);
                 });
+        });
+    },
+    getLatestBlockchainInfo () {
+        return MongooseService.find(blockchainModel, {
+            limit: 1,
+            sort : {
+                [MongooseService.DOMAIN_PROPERTY.ID]: -1
+            }
+        });
+    },
+    getLatestPriceInfo () {
+        return MongooseService.find(priceModel, {
+            limit: 1,
+            sort : {
+                [MongooseService.DOMAIN_PROPERTY.ID]: -1
+            }
         });
     },
     startPolling () {

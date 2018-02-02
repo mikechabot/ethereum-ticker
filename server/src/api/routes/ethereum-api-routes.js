@@ -1,9 +1,11 @@
 const PATH = {
-    ETHEREUM: '/api/eth'
+    ETH_PRICE     : '/api/eth/price',
+    ETH_BLOCKCHAIN: '/api/eth'
 };
 
 export default {
     configure (app, controller) {
-        app.get(PATH.ETHEREUM, controller.handleGetBlockchainInfo);
+        app.get(PATH.ETH_PRICE, controller.handleGetLatestPriceInfo);
+        app.get(PATH.ETH_BLOCKCHAIN, controller.handleGetLatestBlockchainInfo);
     }
 };
