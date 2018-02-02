@@ -1,0 +1,17 @@
+@import '../../node_modules/bulma/css/bulma.css';
+@import 'common';
+
+body, html {
+  @include full-height;
+  @include margin(0px);
+  font: $font-stack;
+}
+
+#ethereum-ticker {
+  @include flex;
+  @include full-height;
+}
+
+.full-height {
+  @include full-height;
+}
