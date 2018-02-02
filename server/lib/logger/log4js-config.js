@@ -2,7 +2,7 @@
 
 module.exports = {
     appenders: {
-        file: { type: 'file', filename: 'quickrant-node.log' },
+        file: { type: 'file', filename: 'ethereum-api-node.log' },
         out: { type: 'console' }
     },
     categories: {
