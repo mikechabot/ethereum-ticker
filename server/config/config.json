@@ -1,0 +1,19 @@
+{
+  "port": 8080,
+  "mongoUrl": "mongodb://localhost:27017/ethereum-ticker",
+  "logFilePath": "D:\\_logs",
+  "whitelist": [
+    "http://localhost:3060",
+    "http://marketmovers.io",
+    "http://www.marketmovers.io"
+  ],
+  "api": {
+    "blockcypher": {
+      "url": "https://api.blockcypher.com/v1/beth/test",
+      "maxRequestsPerHour": 200
+    },
+    "coinmarketcap": {
+      "url": "https://api.coinmarketcap.com/v1/ticker/ethereum/"
+    }
+  }
+}

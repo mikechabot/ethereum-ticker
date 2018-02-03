@@ -21,11 +21,17 @@ export default {
     getWhitelist () {
         return instance.getRequiredProperty('whitelist');
     },
-    getMaxRequestsPerHour () {
-        return instance.getRequiredProperty('maxRequestsPerHour');
+    getBlockcypherURL () {
+        return instance.getRequiredProperty('api.blockcypher.url');
     },
-    getAPIToken () {
-        return instance.getRequiredProperty('apiToken');
+    getBlockcypherToken () {
+        return instance.getProperty('api.blockcypher.token');
+    },
+    getBlockcypherMaxRequestsPerHour () {
+        return instance.getRequiredProperty('api.blockcypher.maxRequestsPerHour');
+    },
+    getCoinMarketCapURL () {
+        return instance.getRequiredProperty('api.coinmarketcap.url');
     }
 };
 

@@ -30,14 +30,14 @@ const StartupService = {
         return new Promise((resolve, reject) => {
             try {
                 const appConfig = ConfigService.getConfig();
-                logger.info('Listing application configuration');
-                logger.info('=================================');
-                for (let prop in appConfig) {
-                    if (appConfig.hasOwnProperty(prop)) {
-                        logger.info(`${prop}: ${JSON.stringify(appConfig[prop])}`);
-                    }
-                }
-                logger.info('=================================');
+                // logger.info('Listing application configuration');
+                // logger.info('=================================');
+                // for (let prop in appConfig) {
+                //     if (appConfig.hasOwnProperty(prop)) {
+                //         logger.info(`${prop}: ${JSON.stringify(appConfig[prop])}`);
+                //     }
+                // }
+                // logger.info('=================================');
                 return resolve();
             } catch (error) {
                 return reject(error);
@@ -56,13 +56,13 @@ const StartupService = {
                 { description: 'Domain Properties', path: '../mongoose/plugin/domain-properties' }
             ];
 
-            logger.info(`Configuring ${plugins.length} Mongoose plugins...`);
+            logger.info(`Configuring ${plugins.length} Mongoose plugins`);
             plugins.forEach(plugin => {
                 logger.info(`Attaching ${plugin.description} plugin`);
                 mongoose.plugin(require(plugin.path));
             });
 
-            logger.info('Importing Mongoose Schemas...');
+            logger.info('Importing Mongoose Schemas');
             require('../mongoose/schemas');
 
             logger.info('Completed mongoose configuration');
@@ -148,14 +148,20 @@ const StartupService = {
                     ConfigService.getPort(),
                     () => {
                         logger.info(`Express started. Listening on ${ConfigService.getPort()}`);
-
-                        const EthereumAPIService = require('../api/services/ethereum-api-service').default;
-                        EthereumAPIService.startPolling();
+                        _startBlockchainPolling();
                     }
                 );
         });
     }
 };
+
+function _startBlockchainPolling () {
+    const EthereumAPIService = require('../api/services/ethereum-api-service').default;
+    logger.info('Starting polling in 5 seconds...');
+    setTimeout(() => {
+        EthereumAPIService.startPolling();
+    }, 5000);
+}
 
 function _getMongoDbVersion () {
     return new Promise((resolve, reject) => {

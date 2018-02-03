@@ -6,22 +6,20 @@ import logger from '../../logger/logger';
 const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
 const priceModel = MongooseService.MODELS.ETH_PRICE;
 
-/**
- * https://www.blockcypher.com/dev/bitcoin/#rate-limits-and-tokens
- * @type {number}
- */
-const MAX_REQUESTS_PER_HOUR = ConfigService.getMaxRequestsPerHour();
-const API_TOKEN = ConfigService.getAPIToken();
-
 let pollingInterval;
 
 let svc = {};
 const EthereumAPIService = svc = {
     getBlockchainInfo () {
-        return DataAccessService.get(`https://api.blockcypher.com/v1/eth/main?token=${API_TOKEN}`);
+        let url = ConfigService.getBlockcypherURL();
+        const token = ConfigService.getBlockcypherToken();
+        if (token) {
+            url = `${url}&token=${token}`;
+        }
+        return DataAccessService.get(url);
     },
     getEthereumPriceInfo () {
-        return DataAccessService.get('https://api.coinmarketcap.com/v1/ticker/ethereum/');
+        return DataAccessService.get(ConfigService.getCoinMarketCapURL());
     },
     saveBlockChainInfo () {
         return new Promise((resolve, reject) => {
@@ -30,13 +28,16 @@ const EthereumAPIService = svc = {
                 svc.getEthereumPriceInfo()
             ])
                 .then(values => {
+                    const blockchain = values[0];
+                    const price = values[1][0];
                     Promise.all([
-                        MongooseService.saveNewObject(blockchainModel, values[0]),
-                        MongooseService.saveNewObject(priceModel, values[1][0])
+                        MongooseService.saveNewObject(blockchainModel, blockchain),
+                        MongooseService.saveNewObject(priceModel, price)
                     ])
-                        .then(results => {
-                            logger.info('Polled blockchain', JSON.stringify(results));
-                            resolve(results);
+                        .then(resolve)
+                        .catch(error => {
+                            logger.error(error);
+                            reject(error);
                         });
                 })
                 .catch(error => {
@@ -63,15 +64,32 @@ const EthereumAPIService = svc = {
     },
     startPolling () {
         if (!pollingInterval) {
-            logger.info('Starting ETH blockchain polling...');
-            logger.info(`Maximum requests per hours: ${MAX_REQUESTS_PER_HOUR}`);
-            pollingInterval = setInterval(svc.saveBlockChainInfo, (60 * 60 / MAX_REQUESTS_PER_HOUR) * 1000);
+            const maxRequestsPerHour = ConfigService.getBlockcypherMaxRequestsPerHour();
+            const requestsPerSecond = (60 * 60 / maxRequestsPerHour);
+
+            logger.info('');
+            logger.info('***************************************');
+            logger.info('Starting ETH blockchain polling');
+            logger.info(`Using API @ ${ConfigService.getBlockcypherURL()}`);
+            logger.info(`Maximum requests per hour: ${maxRequestsPerHour}`);
+            logger.info(`Polling interval: ${requestsPerSecond} seconds`);
+            logger.info(`API Token: ${ConfigService.getBlockcypherToken() || 'None'}`);
+            logger.info('***************************************');
+            logger.info('');
+
+            svc.saveBlockChainInfo()
+                .then(() => {
+                    pollingInterval = setInterval(svc.saveBlockChainInfo, requestsPerSecond * 1000);
+                })
+                .catch(error => {
+                    logger.error(error);
+                });
         }
     },
     stopPolling () {
         if (pollingInterval) {
             logger.info('Stopping ETH blockchain polling...');
-            window.clearInterval(pollingInterval);
+            clearInterval(pollingInterval);
             pollingInterval = undefined;
         }
     }

@@ -1,6 +1,6 @@
 const PATH = {
     ETH_PRICE     : '/api/eth/price',
-    ETH_BLOCKCHAIN: '/api/eth'
+    ETH_BLOCKCHAIN: '/api/eth/blockchain'
 };
 
 export default {
