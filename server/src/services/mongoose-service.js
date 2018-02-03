@@ -24,6 +24,14 @@ const PARAMS = {
     }
 };
 
+const QUERY_PROPERTY = {
+    SORT                 : 'sort',
+    ID                   : DOMAIN_PROPERTY.ID,
+    GREATER_THAN_OR_EQUAL: '$gte',
+    LESS_THAN_OR_EQUAL   : '$lte',
+    IN                   : '$in'
+};
+
 function __getModelInstance (Model, object, isNew) {
     const instance = new Model(object);
     instance.isNew = isNew;
@@ -34,6 +42,7 @@ export default {
     MODELS         : MODELS,
     PARAMS         : PARAMS,
     DOMAIN_PROPERTY: DOMAIN_PROPERTY,
+    QUERY_PROPERTY : QUERY_PROPERTY,
     execute (query, options) {
         const { populate, limit, sort, skip } = options;
 

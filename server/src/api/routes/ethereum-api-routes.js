@@ -1,11 +1,15 @@
 const PATH = {
-    ETH_PRICE     : '/api/eth/price',
-    ETH_BLOCKCHAIN: '/api/eth/blockchain'
+    ETH_PRICE_CURRENT        : '/api/eth/price',
+    ETH_PRICE_HISTORICAL     : '/api/eth/price/:daysBack',
+    ETH_BLOCKCHAIN_CURRENT   : '/api/eth/blockchain',
+    ETH_BLOCKCHAIN_HISTORICAL: '/api/eth/blockchain/:daysBack'
 };
 
 export default {
     configure (app, controller) {
-        app.get(PATH.ETH_PRICE, controller.handleGetLatestPriceInfo);
-        app.get(PATH.ETH_BLOCKCHAIN, controller.handleGetLatestBlockchainInfo);
+        app.get(PATH.ETH_PRICE_CURRENT, controller.handleGetCurrentPriceInfo);
+        app.get(PATH.ETH_PRICE_HISTORICAL, controller.handleGetHistoricalPriceInfo);
+        app.get(PATH.ETH_BLOCKCHAIN_CURRENT, controller.handleGetCurrentBlockchainInfo);
+        app.get(PATH.ETH_BLOCKCHAIN_HISTORICAL, controller.handleGetHistoricalBlockchainInfo);
     }
 };

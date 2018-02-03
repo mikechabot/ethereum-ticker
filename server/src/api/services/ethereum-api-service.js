@@ -1,7 +1,11 @@
+import moment from 'moment';
+
 import DataAccessService from '../../services/data-access-service';
 import MongooseService from '../../services/mongoose-service';
 import ConfigService from '../../services/config-service';
 import logger from '../../logger/logger';
+
+const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
 const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
 const priceModel = MongooseService.MODELS.ETH_PRICE;
@@ -12,6 +16,16 @@ let priceInterval;
 const intervals = [ blockchainInterval, priceInterval];
 
 let currentEthUsdDelta = -1;
+
+function __generateParameters (daysBack) {
+    const params = {};
+    if (daysBack) {
+        params[DOMAIN_PROPERTY.CREATED_DATE] = {
+            [QUERY_PROPERTY.GREATER_THAN_OR_EQUAL]: new Date(moment().subtract(daysBack, 'days').startOf('day').toString())
+        };
+    }
+    return params;
+}
 
 let svc = {};
 const EthereumAPIService = svc = {
@@ -48,7 +62,7 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getLatestBlockchainInfo () {
+    getCurrentBlockchainInfo () {
         return new Promise((resolve, reject) => {
             MongooseService
                 .find(blockchainModel, {
@@ -68,7 +82,7 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getLatestPriceInfo () {
+    getCurrentPriceInfo () {
         return new Promise((resolve, reject) => {
             MongooseService
                 .find(priceModel, {
@@ -94,6 +108,64 @@ const EthereumAPIService = svc = {
                         USD      : USD.PRICE,
                         USD_delta: currentEthUsdDelta
                     });
+                })
+                .catch(error => {
+                    logger.error(error);
+                    reject(error);
+                });
+        });
+    },
+    getHistoricalBlockchainInfo (daysBack) {
+        return new Promise((resolve, reject) => {
+            MongooseService
+                .find(blockchainModel, {
+                    params: __generateParameters(daysBack),
+                    sort  : {
+                        [MongooseService.DOMAIN_PROPERTY.ID]: 1
+                    }
+                })
+                .then(blockInfos => {
+                    if (blockInfos && blockInfos.length > 0) {
+                        resolve(blockInfos.map(blockInfo => {
+                            return {
+                                y                   : blockInfo.unconfirmed_count,
+                                x                   : moment(blockInfo[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
+                                [DOMAIN_PROPERTY.ID]: blockInfo[DOMAIN_PROPERTY.ID]
+                            };
+                        }).filter(info => info.y > 100));
+                    } else {
+                        resolve([]);
+                    }
+                })
+                .catch(error => {
+                    logger.error(error);
+                    reject(error);
+                });
+        });
+    },
+    getHistoricalPriceInfoLastNDays (daysBack) {
+        return new Promise((resolve, reject) => {
+            MongooseService
+                .find(priceModel, {
+                    params: __generateParameters(daysBack),
+                    sort  : {
+                        [MongooseService.DOMAIN_PROPERTY.ID]: 1
+                    }
+                })
+                .then(prices => {
+                    if (prices && prices.length > 0) {
+                        resolve(prices.map(price => {
+                            return {
+                                y                   : price.RAW.ETH.BTC.PRICE,
+                                x                   : moment(price[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
+                                USD                 : price.RAW.ETH.USD.PRICE,
+                                [DOMAIN_PROPERTY.ID]: price[DOMAIN_PROPERTY.ID]
+
+                            };
+                        }));
+                    } else {
+                        resolve([]);
+                    }
                 })
                 .catch(error => {
                     logger.error(error);
