@@ -11,18 +11,20 @@ let priceInterval;
 
 const intervals = [ blockchainInterval, priceInterval];
 
+let currentEthUsdDelta = -1;
+
 let svc = {};
 const EthereumAPIService = svc = {
     getBlockchainInfoFromAPI () {
-        let url = ConfigService.getBlockcypherURL();
-        const token = ConfigService.getBlockcypherToken();
+        let url = ConfigService.getBlockchainAPIUrl();
+        const token = ConfigService.getBlockchainAPIToken();
         if (token) {
             url = `${url}?token=${token}`;
         }
         return DataAccessService.get(url);
     },
     getPriceInfoFromAPI () {
-        return DataAccessService.get(ConfigService.getCoinMarketCapURL());
+        return DataAccessService.get(ConfigService.getPriceAPIUrl());
     },
     getAndSaveBlockchainInfo () {
         return new Promise((resolve, reject) => {
@@ -38,7 +40,7 @@ const EthereumAPIService = svc = {
     getAndSavePriceInfo () {
         return new Promise((resolve, reject) => {
             svc.getPriceInfoFromAPI()
-                .then(price => MongooseService.saveNewObject(priceModel, Object.assign({}, price[0], { volume_24h: price[0]['24h_volume_usd'] })))
+                .then(price => MongooseService.saveNewObject(priceModel, price))
                 .then(resolve)
                 .catch(error => {
                     logger.error(error);
@@ -77,8 +79,21 @@ const EthereumAPIService = svc = {
                 })
                 .then(prices => {
                     const latestEthPrice = prices[0];
-                    latestEthPrice.price_usd_delta = (latestEthPrice.price_usd - (prices[1] ? prices[1].price_usd : 0)).toFixed(2);
-                    resolve(latestEthPrice);
+                    const prevEthPrice = prices[1];
+
+                    const { ETH } = latestEthPrice.RAW;
+                    const { BTC, USD} = ETH;
+
+                    const ethUsdDelta = (USD.PRICE - (prevEthPrice ? prevEthPrice.RAW.ETH.USD.PRICE : 0)).toFixed(2);
+                    if (ethUsdDelta !== '0.00') {
+                        currentEthUsdDelta = ethUsdDelta;
+                    }
+
+                    resolve({
+                        BTC      : BTC.PRICE,
+                        USD      : USD.PRICE,
+                        USD_delta: currentEthUsdDelta
+                    });
                 })
                 .catch(error => {
                     logger.error(error);
@@ -91,16 +106,16 @@ const EthereumAPIService = svc = {
             {
                 key           : 'blockchain',
                 interval      : blockchainInterval,
-                url           : ConfigService.getBlockcypherURL(),
-                token         : ConfigService.getBlockcypherToken(),
-                requestsPerDay: ConfigService.getBlockcypherMaxRequestsPerDay(),
+                url           : ConfigService.getBlockchainAPIUrl(),
+                token         : ConfigService.getBlockchainAPIToken(),
+                requestsPerDay: ConfigService.getBlockchainAPIMaxRequestsPerDay(),
                 promise       : svc.getAndSaveBlockchainInfo
             },
             {
                 key           : 'price',
                 interval      : priceInterval,
-                url           : ConfigService.getCoinMarketCapURL(),
-                requestsPerDay: ConfigService.getCoinMarketCapMaxRequestsPerDay(),
+                url           : ConfigService.getPriceAPIUrl(),
+                requestsPerDay: ConfigService.getPriceAPIMaxRequestsPerDay(),
                 promise       : svc.getAndSavePriceInfo
             }
 

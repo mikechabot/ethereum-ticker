@@ -21,21 +21,21 @@ export default {
     getWhitelist () {
         return instance.getRequiredProperty('whitelist');
     },
-    getBlockcypherURL () {
+    getBlockchainAPIUrl () {
         return instance.getRequiredProperty('api.blockcypher.url');
     },
-    getBlockcypherToken () {
+    getBlockchainAPIToken () {
         return instance.getProperty('api.blockcypher.token');
     },
-    getBlockcypherMaxRequestsPerDay () {
+    getBlockchainAPIMaxRequestsPerDay () {
         return instance.getRequiredProperty('api.blockcypher.maxRequestsPerDay');
     },
-    getCoinMarketCapURL () {
-        return instance.getRequiredProperty('api.coinmarketcap.url');
+    getPriceAPIUrl () {
+        return instance.getRequiredProperty('api.cryptocompare.url');
     },
-    getCoinMarketCapMaxRequestsPerDay () {
-        return instance.getRequiredProperty('api.coinmarketcap.maxRequestsPerDay');
-    },
+    getPriceAPIMaxRequestsPerDay () {
+        return instance.getRequiredProperty('api.cryptocompare.maxRequestsPerDay');
+    }
 };
 
 function Configuration (config) {

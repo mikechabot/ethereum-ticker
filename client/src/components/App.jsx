@@ -6,15 +6,14 @@ import Footer from './common/bulma/Footer';
 import EthereumService from '../services/domain/EthereumService';
 import Icon from './common/Icon';
 
-const POLL_INTERVAL_IN_SECONDS = 30;
+const POLL_INTERVAL_IN_SECONDS = 2;
 
 class App extends React.Component {
     constructor (props) {
         super(props);
         this.state = {
             blockchainInfo: null,
-            priceInfo     : null,
-            pendingDelta  : -1
+            priceInfo     : null
         };
         this._loadBlockchainInfo = this._loadBlockchainInfo.bind(this);
         this.interval = null;
@@ -87,13 +86,13 @@ class App extends React.Component {
                 getValueFromRaw: data => (
                     <span>
                         <Icon icon="dollar-sign" />&nbsp;
-                        {data.price_usd} {data.price_usd_delta >= 0
-                            ? <small className="has-text-success">(+{data.price_usd_delta})</small>
-                            : <small className="has-text-danger">({data.price_usd_delta})</small>}
+                        {data.USD} {data.USD_delta >= 0
+                            ? <small className="has-text-success">(+{data.USD_delta})</small>
+                            : <small className="has-text-danger">({data.USD_delta})</small>}
                     </span>
                 )
             },
-            { stateKey: 'priceInfo', propKey: 'price_btc', label: 'ETH/BTC', icon: 'btc', iconPrefix: 'fab' }
+            { stateKey: 'priceInfo', propKey: 'BTC', label: 'ETH/BTC', icon: 'btc', iconPrefix: 'fab' }
         ];
     }
 
@@ -140,10 +139,7 @@ class App extends React.Component {
     _loadBlockchainInfo () {
         this._fetchBlockchainInfo()
             .then(results => {
-                console.log(results[0]);
-                if (!this.state.blockchainInfo || results[0]._id !== this.state.blockchainInfo._id) {
-                    this._setBlockchainState(results);
-                }
+                this._setBlockchainState(results);
             })
             .catch(error => {
                 console.log(error);
@@ -156,10 +152,7 @@ class App extends React.Component {
     _setBlockchainState (results, cb) {
         this.setState({
             blockchainInfo: results[0],
-            priceInfo     : results[1],
-            pendingDelta  : this.state.pendingDelta === -1
-                ? 0
-                : results[0].unconfirmed_count - this.state.blockchainInfo.unconfirmed_count
+            priceInfo     : results[1]
         }, cb);
     }
 }
