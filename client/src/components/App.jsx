@@ -5,6 +5,7 @@ import Hero from './common/bulma/Hero';
 import Footer from './common/bulma/Footer';
 import EthereumService from '../services/domain/EthereumService';
 import Icon from './common/Icon';
+import Chart from './common/Chart';
 
 const POLL_INTERVAL_IN_SECONDS = 2;
 
@@ -60,6 +61,14 @@ class App extends React.Component {
                 <div className="m-top--small">
                     { this._renderLevel(this._getLevel1()) }
                 </div>
+                <Flex hAlignCenter>
+                    <Chart
+                        height={400}
+                        width={800}
+                        legend="Pending TX (Last 3 Days)"
+                        dataset={this.state.historicalBlockchainInfo}
+                    />
+                </Flex>
                 <div>
                     <Footer />
                 </div>
@@ -148,12 +157,18 @@ class App extends React.Component {
     }
 
     _fetchBlockchainInfo () {
-        return Promise.all([EthereumService.getBlockchainInfo(), EthereumService.getPriceInfo()]);
+        return Promise.all([
+            EthereumService.getBlockchainInfo(),
+            EthereumService.getPriceInfo(),
+            EthereumService.getHistoricalBlockchainInfo(3)
+        ]);
     }
+
     _setBlockchainState (results, cb) {
         this.setState({
-            blockchainInfo: results[0],
-            priceInfo     : results[1]
+            blockchainInfo          : results[0],
+            priceInfo               : results[1],
+            historicalBlockchainInfo: results[2]
         }, cb);
     }
 }

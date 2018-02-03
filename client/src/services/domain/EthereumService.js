@@ -6,6 +6,9 @@ const EthereumService = {
     },
     getPriceInfo () {
         return DataAccessService.get('/eth/price');
+    },
+    getHistoricalBlockchainInfo (daysBack) {
+        return DataAccessService.get(`/eth/blockchain/${daysBack}`);
     }
 };
 
