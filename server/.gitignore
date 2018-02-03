@@ -18,4 +18,4 @@ dist
 
 # Configuration
 config/cert
-config/config.json.prod
+config/config.json

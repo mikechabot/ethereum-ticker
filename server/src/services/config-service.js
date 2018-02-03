@@ -27,12 +27,15 @@ export default {
     getBlockcypherToken () {
         return instance.getProperty('api.blockcypher.token');
     },
-    getBlockcypherMaxRequestsPerHour () {
-        return instance.getRequiredProperty('api.blockcypher.maxRequestsPerHour');
+    getBlockcypherMaxRequestsPerDay () {
+        return instance.getRequiredProperty('api.blockcypher.maxRequestsPerDay');
     },
     getCoinMarketCapURL () {
         return instance.getRequiredProperty('api.coinmarketcap.url');
-    }
+    },
+    getCoinMarketCapMaxRequestsPerDay () {
+        return instance.getRequiredProperty('api.coinmarketcap.maxRequestsPerDay');
+    },
 };
 
 function Configuration (config) {

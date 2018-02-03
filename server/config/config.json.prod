@@ -10,7 +10,8 @@
   "api": {
     "blockcypher": {
       "url": "https://api.blockcypher.com/v1/eth/main",
-      "maxRequestsPerDay": 2000
+      "token": "ba83ea8495a4454b8478a9ded6bsa495d",
+      "maxRequestsPerDay": 5000
     },
     "coinmarketcap": {
       "url": "https://api.coinmarketcap.com/v1/ticker/ethereum/",

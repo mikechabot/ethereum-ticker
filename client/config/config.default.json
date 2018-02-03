@@ -1,6 +1,6 @@
 {
   "appConfig": {
-    "port": 3060,
-    "baseUrl": "http://localhost:3020/api"
+    "port": 80,
+    "baseUrl": "http://localhost:8080/api"
   }
 }

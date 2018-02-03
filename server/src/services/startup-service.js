@@ -30,14 +30,14 @@ const StartupService = {
         return new Promise((resolve, reject) => {
             try {
                 const appConfig = ConfigService.getConfig();
-                // logger.info('Listing application configuration');
-                // logger.info('=================================');
-                // for (let prop in appConfig) {
-                //     if (appConfig.hasOwnProperty(prop)) {
-                //         logger.info(`${prop}: ${JSON.stringify(appConfig[prop])}`);
-                //     }
-                // }
-                // logger.info('=================================');
+                logger.info('Listing application configuration');
+                logger.info('=================================');
+                for (let prop in appConfig) {
+                    if (appConfig.hasOwnProperty(prop)) {
+                        logger.info(`${prop}: ${JSON.stringify(appConfig[prop])}`);
+                    }
+                }
+                logger.info('=================================');
                 return resolve();
             } catch (error) {
                 return reject(error);
@@ -148,19 +148,21 @@ const StartupService = {
                     ConfigService.getPort(),
                     () => {
                         logger.info(`Express started. Listening on ${ConfigService.getPort()}`);
-                        _startBlockchainPolling();
+                        _startPollingAPIs();
                     }
                 );
         });
     }
 };
 
-function _startBlockchainPolling () {
+function _startPollingAPIs () {
     const EthereumAPIService = require('../api/services/ethereum-api-service').default;
-    logger.info('Starting polling in 5 seconds...');
-    setTimeout(() => {
-        EthereumAPIService.startPolling();
-    }, 5000);
+    logger.info('');
+    logger.info('**************************************');
+    logger.info('Starting polling in 5 seconds');
+    logger.info('**************************************');
+    logger.info('');
+    setTimeout(EthereumAPIService.startPolling, 5000);
 }
 
 function _getMongoDbVersion () {

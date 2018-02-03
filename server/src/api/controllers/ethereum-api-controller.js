@@ -4,13 +4,13 @@ const EthereumAPIController = {
     handleGetLatestBlockchainInfo (request, response, next) {
         EthereumAPIService
             .getLatestBlockchainInfo()
-            .then(data => response.json(data[0]))
+            .then(data => response.json(data))
             .catch(error => next(error));
     },
     handleGetLatestPriceInfo (request, response, next) {
         EthereumAPIService
             .getLatestPriceInfo()
-            .then(data => response.json(data[0]))
+            .then(data => response.json(data))
             .catch(error => next(error));
     }
 };

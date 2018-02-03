@@ -4,10 +4,9 @@ import { Flex } from './common/glamorous/Flex';
 import Hero from './common/bulma/Hero';
 import Footer from './common/bulma/Footer';
 import EthereumService from '../services/domain/EthereumService';
-import moment from 'moment';
 import Icon from './common/Icon';
 
-const MAX_REQUESTS_PER_HOUR = 500;
+const POLL_INTERVAL_IN_SECONDS = 30;
 
 class App extends React.Component {
     constructor (props) {
@@ -25,7 +24,7 @@ class App extends React.Component {
         this._fetchBlockchainInfo()
             .then(results => {
                 this._setBlockchainState(results, () => {
-                    this.interval = window.setInterval(this._loadBlockchainInfo, (60 * 60 / MAX_REQUESTS_PER_HOUR) * 1000);
+                    this.interval = window.setInterval(this._loadBlockchainInfo, POLL_INTERVAL_IN_SECONDS * 1000);
                 });
             })
             .catch(error => {
@@ -44,9 +43,8 @@ class App extends React.Component {
         if (!this.state.blockchainInfo) {
             return <span />;
         }
-        const { blockchainInfo, priceInfo, pendingDelta } = this.state;
         return (
-            <Flex column flex={1} flexShrink={0}>
+            <Flex column flex={1} flexShrink={0} justifyContent="space-between">
                 <div>
                     <Hero
                         theme="dark"
@@ -56,94 +54,12 @@ class App extends React.Component {
                         iconPrefix="fab"
                     />
                 </div>
-                <div>
-                    <section className="hero is-info is-large">
-                        <div className="hero-body">
-                            <div className="container">
-                                <Flex>
-                                    <Flex column vAlignCenter>
-                                        <div>
-                                            <h1 className="subtitle">
-                                                <Icon icon="clock"/>
-                                                &nbsp;Last Block
-                                            </h1>
-                                            <h2 className="title">
-                                                {moment(blockchainInfo.time).format('L LTS')}
-                                            </h2>
-                                        </div>
-                                        <div className="m-top--large">
-                                            <h1 className="subtitle">
-                                                <Icon icon="th-large"/>
-                                                &nbsp;Block Height
-                                            </h1>
-                                            <h2 className="title">{blockchainInfo.height}</h2>
-                                        </div>
-                                    </Flex>
-                                    <Flex column className="m-left--large" vAlignCenter>
-                                        <div>
-                                            <h1 className="subtitle">
-                                                <Icon icon="hourglass"/>
-                                                &nbsp;Pending Transactions
-                                            </h1>
-                                            <h2 className="title">{blockchainInfo.unconfirmed_count}</h2>
-                                        </div>
-                                        <div className="m-top--large">
-                                            <h1 className="subtitle">
-                                                <Icon icon="cog"/>
-                                                &nbsp;Pending Delta
-                                            </h1>
-                                            <h2 className="title">
-                                                {
-                                                    pendingDelta >= 0
-                                                        ? <span>+{pendingDelta}</span>
-                                                        : pendingDelta
-                                                }
-                                            </h2>
-                                        </div>
-                                    </Flex>
-                                    <Flex column className="m-left--large" vAlignCenter>
-                                        <div>
-                                            <h1 className="subtitle">
-                                                <Icon icon="dollar-sign"/>
-                                                &nbsp;Price
-                                            </h1>
-                                            <h2 className="title">${priceInfo.price_usd}</h2>
-                                        </div>
-                                        <div className="m-top--large">
-                                            <h1 className="subtitle">
-                                                <Icon icon="bitcoin" prefix="fab"/>
-                                                &nbsp;ETC/BTC
-                                            </h1>
-                                            <h2 className="title">
-                                                { priceInfo.price_btc}
-                                            </h2>
-                                        </div>
-                                    </Flex>
-                                    <Flex column className="m-left--large" vAlignCenter>
-                                        <div>
-                                            <h1 className="subtitle">
-                                                <Icon icon="chart-line" />
-                                                &nbsp;% Change 1hr
-                                            </h1>
-                                            <h2 className="title">
-                                                { priceInfo.percent_change_1h}
-                                            </h2>
-                                        </div>
-                                        <div className="m-top--large">
-                                            <h1 className="subtitle">
-                                                <Icon icon="chart-line" />
-                                                &nbsp;% Change 24hr
-                                            </h1>
-                                            <h2 className="title">
-                                                { priceInfo.percent_change_24h}
-                                            </h2>
-                                        </div>
-                                    </Flex>
-                                </Flex>
-                            </div>
-                        </div>
-                    </section>
+                <div className="m-top--small">
+                    { this._renderLevel(this._getLevel1()) }
                 </div>
+                <Flex flex={1}>
+                    hey
+                </Flex>
                 <div>
                     <Footer />
                 </div>
@@ -151,9 +67,80 @@ class App extends React.Component {
         );
     }
 
+    _getLevel1 () {
+        return [
+            {
+                stateKey       : 'blockchainInfo',
+                label          : 'Pending Txs',
+                getValueFromRaw: data => (
+                    <span>
+                        <Icon icon="hourglass-start" prefix="fas" />&nbsp;
+                        {data.unconfirmed_count} {data.pendingTxDelta >= 0
+                            ? <small className="has-text-success">(+{data.pendingTxDelta})</small>
+                            : <small className="has-text-danger">({data.pendingTxDelta})</small>}
+                    </span>
+                )
+            },
+            {
+                stateKey       : 'priceInfo',
+                label          : 'ETH/USD',
+                getValueFromRaw: data => (
+                    <span>
+                        <Icon icon="dollar-sign" />&nbsp;
+                        {data.price_usd} {data.price_usd_delta >= 0
+                            ? <small className="has-text-success">(+{data.price_usd_delta})</small>
+                            : <small className="has-text-danger">({data.price_usd_delta})</small>}
+                    </span>
+                )
+            },
+            { stateKey: 'priceInfo', propKey: 'price_btc', label: 'ETH/BTC', icon: 'btc', iconPrefix: 'fab' }
+        ];
+    }
+
+    _renderLevel (level) {
+        return (
+            <nav className="level is-mobile">
+                { level.map((item, index) => {
+                    let value = this.state[item.stateKey];
+                    if (item.getValueFromRaw) {
+                        value = item.getValueFromRaw(value);
+                    } else {
+                        if (item.propKey) {
+                            value = value[item.propKey];
+                        }
+                        if (item.getValue) {
+                            value = item.getValue(value);
+                        }
+                    }
+
+                    return (
+                        <div key={index} className="level-item has-text-centered">
+                            <div>
+                                <p className="heading">{item.label}</p>
+                                <p className="title">
+                                    {
+                                        item.icon
+                                            ? (
+                                                <span>
+                                                    <Icon icon={item.icon} prefix={item.iconPrefix} />&nbsp;
+                                                </span>
+                                            )
+                                            : null
+                                    }
+                                    {value}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </nav>
+        );
+    }
+
     _loadBlockchainInfo () {
         this._fetchBlockchainInfo()
             .then(results => {
+                console.log(results[0]);
                 if (!this.state.blockchainInfo || results[0]._id !== this.state.blockchainInfo._id) {
                     this._setBlockchainState(results);
                 }

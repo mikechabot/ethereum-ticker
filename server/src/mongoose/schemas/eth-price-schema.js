@@ -6,7 +6,7 @@ const schema = new mongoose.Schema({
     rank              : Number,
     price_usd         : Number,
     price_btc         : Number,
-    volume            : Number,
+    volume_24hr       : Number,
     market_cap_usd    : Number,
     available_supply  : Number,
     total_supply      : Number,
