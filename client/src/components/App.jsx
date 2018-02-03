@@ -57,7 +57,7 @@ class App extends React.Component {
                     { this._renderLevel(this._getLevel1()) }
                 </div>
                 <Flex flex={1}>
-                    hey
+                    &nbsp;
                 </Flex>
                 <div>
                     <Footer />
