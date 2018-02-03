@@ -43,7 +43,11 @@ class App extends React.Component {
             return <span />;
         }
         return (
-            <Flex column flex={1} flexShrink={0} justifyContent="space-between">
+            <Flex
+                column
+                flex={1}
+                flexShrink={0}
+                justifyContent="space-between">
                 <div>
                     <Hero
                         theme="dark"
@@ -56,9 +60,6 @@ class App extends React.Component {
                 <div className="m-top--small">
                     { this._renderLevel(this._getLevel1()) }
                 </div>
-                <Flex flex={1}>
-                    &nbsp;
-                </Flex>
                 <div>
                     <Footer />
                 </div>
@@ -98,7 +99,7 @@ class App extends React.Component {
 
     _renderLevel (level) {
         return (
-            <nav className="level is-mobile">
+            <nav className="level">
                 { level.map((item, index) => {
                     let value = this.state[item.stateKey];
                     if (item.getValueFromRaw) {
