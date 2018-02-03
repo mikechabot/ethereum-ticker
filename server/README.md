@@ -1,1 +1,1 @@
-# ethererum-ticker
+# ethereum-ticker
