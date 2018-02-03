@@ -58,3 +58,5 @@ typings/
 .env
 
 lib
+/server/config/config.json.prod
+/server/config/config.json
