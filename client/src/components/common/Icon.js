@@ -4,10 +4,15 @@ import PropTypes from 'prop-types';
 function Icon ({
     icon,
     prefix,
+    onClick,
     className
 }) {
     let iconPrefix = prefix || 'fa';
-    return (<i className={`${iconPrefix} fa-${icon} ${className || ''}`} />);
+    return (
+        <span onClick={onClick}>
+            <i className={`${iconPrefix} fa-${icon} ${className || ''}`} />
+        </span>
+    );
 }
 
 Icon.propTypes = {

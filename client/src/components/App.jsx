@@ -5,9 +5,9 @@ import Hero from './common/bulma/Hero';
 import Footer from './common/bulma/Footer';
 import EthereumService from '../services/domain/EthereumService';
 import Icon from './common/Icon';
-import Chart from './common/Chart';
+import MixedChart from './common/MixedChart';
 
-const POLL_INTERVAL_IN_SECONDS = 2;
+const POLL_INTERVAL_IN_SECONDS = 10;
 
 class App extends React.Component {
     constructor (props) {
@@ -16,20 +16,16 @@ class App extends React.Component {
             blockchainInfo: null,
             priceInfo     : null
         };
-        this._loadBlockchainInfo = this._loadBlockchainInfo.bind(this);
+        this._loadData = this._loadData.bind(this);
+        this._getAndSetPriceInfo = this._getAndSetPriceInfo.bind(this);
+        this._getAndSetBlockchainInfo = this._getAndSetBlockchainInfo.bind(this);
+        this._getAndSetChartInfo = this._getAndSetChartInfo.bind(this);
+        this._tryAgain = this._tryAgain.bind(this);
         this.interval = null;
     }
 
     componentDidMount () {
-        this._fetchBlockchainInfo()
-            .then(results => {
-                this._setBlockchainState(results, () => {
-                    this.interval = window.setInterval(this._loadBlockchainInfo, POLL_INTERVAL_IN_SECONDS * 1000);
-                });
-            })
-            .catch(error => {
-                console.log(error);
-            });
+        this._loadData();
     }
 
     componentWillUnmount () {
@@ -40,9 +36,6 @@ class App extends React.Component {
     }
 
     render () {
-        if (!this.state.blockchainInfo) {
-            return <span />;
-        }
         return (
             <Flex
                 column
@@ -58,16 +51,57 @@ class App extends React.Component {
                         iconPrefix="fab"
                     />
                 </div>
+                {
+                    this.state.error
+                        ? (
+                            <Flex hAlignCenter className="notification is-danger">
+                                <button
+                                    className="delete"
+                                    onClick={this._tryAgain}
+                                />
+                                Something went wrong. I'm sure we're looking into it.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
+                            </Flex>
+                        )
+                        : null
+                }
                 <div className="m-top--small">
-                    { this._renderLevel(this._getLevel1()) }
+                    {
+                        this.state.priceInfo
+                            ? this._renderLevel(this._getLevel1())
+                            : null
+                    }
                 </div>
-                <Flex hAlignCenter>
-                    <Chart
-                        height={400}
-                        width={800}
-                        legend="Pending TX (Last 3 Days)"
-                        dataset={this.state.historicalBlockchainInfo}
-                    />
+                <Flex hAlignCenter flexShrink={0}>
+                    {
+                        this.state.isFetchingChartInfo
+                            ? (
+                                <Flex hAlignCenter>
+                                    <i className="fas fa-cog fa-spin fa-5x" />
+                                </Flex>
+                            )
+                            : null
+                    }
+                    {
+                        this.state.historicalBlockchainInfo
+                            ? (
+                                <MixedChart
+                                    height={400}
+                                    width={800}
+                                    legend="Pending TX (Last 3 Days)"
+                                    datasets={[
+                                        {
+                                            label: 'Pending TX',
+                                            data : this.state.historicalBlockchainInfo
+                                        },
+                                        {
+                                            label: 'ETH/USD',
+                                            data : this.state.historicalPriceInfo
+                                        }
+                                    ]}
+                                />
+                            )
+                            : null
+                    }
                 </Flex>
                 <div>
                     <Footer />
@@ -79,6 +113,7 @@ class App extends React.Component {
     _getLevel1 () {
         return [
             {
+                pendingKey     : 'isFetchingBlockchain',
                 stateKey       : 'blockchainInfo',
                 label          : 'Pending Txs',
                 getValueFromRaw: data => (
@@ -91,18 +126,26 @@ class App extends React.Component {
                 )
             },
             {
+                pendingKey     : 'isFetchingPrice',
                 stateKey       : 'priceInfo',
                 label          : 'ETH/USD',
+                icon           : 'dollar-sign',
                 getValueFromRaw: data => (
                     <span>
-                        <Icon icon="dollar-sign" />&nbsp;
                         {data.USD} {data.USD_delta >= 0
                             ? <small className="has-text-success">(+{data.USD_delta})</small>
                             : <small className="has-text-danger">({data.USD_delta})</small>}
                     </span>
                 )
             },
-            { stateKey: 'priceInfo', propKey: 'BTC', label: 'ETH/BTC', icon: 'btc', iconPrefix: 'fab' }
+            {
+                pendingKey: 'isFetchingPrice',
+                stateKey  : 'priceInfo',
+                propKey   : 'BTC',
+                label     : 'ETH/BTC',
+                icon      : 'btc',
+                iconPrefix: 'fab'
+            }
         ];
     }
 
@@ -111,14 +154,18 @@ class App extends React.Component {
             <nav className="level">
                 { level.map((item, index) => {
                     let value = this.state[item.stateKey];
-                    if (item.getValueFromRaw) {
-                        value = item.getValueFromRaw(value);
+                    if (this.state[item.pendingKey]) {
+                        value = <i className="fas fa-cog fa-spin" />;
                     } else {
-                        if (item.propKey) {
-                            value = value[item.propKey];
-                        }
-                        if (item.getValue) {
-                            value = item.getValue(value);
+                        if (item.getValueFromRaw) {
+                            value = item.getValueFromRaw(value);
+                        } else {
+                            if (item.propKey) {
+                                value = value[item.propKey];
+                            }
+                            if (item.getValue) {
+                                value = item.getValue(value);
+                            }
                         }
                     }
 
@@ -146,30 +193,99 @@ class App extends React.Component {
         );
     }
 
-    _loadBlockchainInfo () {
-        this._fetchBlockchainInfo()
-            .then(results => {
-                this._setBlockchainState(results);
+    _tryAgain () {
+        this.setState({
+            error     : false,
+            isFetching: true
+        }, this._loadBlockchainInfo);
+    }
+
+    _loadData (silent) {
+        this._loadPriceInfo(silent);
+        this._loadBlockchainInfo(silent);
+        this._loadChartInfo(silent);
+
+        // this._fetchBlockchainInfo()
+        //     .then(results => {
+        //         this._setBlockchainState(results);
+        //     })
+        //     .catch(error => {
+        //         this.setState({ error: true, isFetching: false });
+        //         console.log(error);
+        //     });
+    }
+
+    _loadPriceInfo (silent) {
+        this.setState({
+            isFetchingPrice: !silent
+        }, this._getAndSetPriceInfo);
+    }
+
+    _loadBlockchainInfo (silent) {
+        this.setState({
+            isFetchingBlockchain: !silent
+        }, this._getAndSetBlockchainInfo);
+    }
+
+    _loadChartInfo (silent) {
+        this.setState({
+            isFetchingChartInfo: !silent
+        }, () => this._getAndSetChartInfo(
+            () => {
+                if (!this.interval) {
+                    this.interval = window.setInterval(() => this._loadData(true), POLL_INTERVAL_IN_SECONDS * 1000);
+                }
+            }
+        ));
+    }
+
+    _getAndSetPriceInfo () {
+        EthereumService
+            .getPriceInfo()
+            .then(priceInfo => {
+                this.setState({
+                    priceInfo,
+                    isFetchingPrice: false
+                });
             })
             .catch(error => {
+                this.setState({ error: true, isFetchingPrice: false });
                 console.log(error);
             });
     }
 
-    _fetchBlockchainInfo () {
-        return Promise.all([
-            EthereumService.getBlockchainInfo(),
-            EthereumService.getPriceInfo(),
-            EthereumService.getHistoricalBlockchainInfo(3)
-        ]);
+    _getAndSetBlockchainInfo () {
+        EthereumService
+            .getBlockchainInfo()
+            .then(blockchainInfo => {
+                this.setState({
+                    blockchainInfo,
+                    isFetchingBlockchain: false
+                });
+            })
+            .catch(error => {
+                this.setState({ error: true, isFetchingBlockchain: false });
+                console.log(error);
+            });
     }
 
-    _setBlockchainState (results, cb) {
-        this.setState({
-            blockchainInfo          : results[0],
-            priceInfo               : results[1],
-            historicalBlockchainInfo: results[2]
-        }, cb);
+    _getAndSetChartInfo (cb) {
+        Promise
+            .all([
+                EthereumService.getHistoricalBlockchainInfo(3),
+                EthereumService.getHistoricalPriceInfo(3)
+            ])
+            .then(values => {
+                this.setState({
+                    historicalBlockchainInfo: values[0],
+                    historicalPriceInfo     : values[1],
+                    isFetchingChartInfo     : false
+                }, cb);
+            })
+            .catch(error => {
+                this.setState({ error: true, isFetchingChartInfo: false });
+                console.log(error);
+            });
     }
 }
 

@@ -1,9 +1,14 @@
 import moment from 'moment';
+import Maybe from 'maybe-baby';
 
 import DataAccessService from '../../services/data-access-service';
 import MongooseService from '../../services/mongoose-service';
 import ConfigService from '../../services/config-service';
 import logger from '../../logger/logger';
+import _groupBy from 'lodash/groupBy';
+import _minBy from 'lodash/minBy';
+import _maxBy from 'lodash/maxBy';
+import _flatten from 'lodash/flatten';
 
 const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
@@ -16,6 +21,9 @@ let priceInterval;
 const intervals = [ blockchainInterval, priceInterval];
 
 let currentEthUsdDelta = -1;
+
+let cachedHistoricalPriceInfo;
+let lastCachedPriceInfoDate;
 
 function __generateParameters (daysBack) {
     const params = {};
@@ -126,15 +134,39 @@ const EthereumAPIService = svc = {
                 })
                 .then(blockInfos => {
                     if (blockInfos && blockInfos.length > 0) {
-                        resolve(blockInfos.map(blockInfo => {
+                        return blockInfos.map(blockInfo => {
                             return {
                                 y                   : blockInfo.unconfirmed_count,
                                 x                   : moment(blockInfo[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
-                                [DOMAIN_PROPERTY.ID]: blockInfo[DOMAIN_PROPERTY.ID]
+                                [DOMAIN_PROPERTY.ID]: blockInfo[DOMAIN_PROPERTY.ID],
+                                timestamp           : blockInfo[DOMAIN_PROPERTY.CREATED_DATE]
                             };
-                        }).filter(info => info.y > 100));
+                        }).filter(info => info.y > 100);
                     } else {
-                        resolve([]);
+                        return [];
+                    }
+                })
+                .then(results => {
+                    if (results.length > 0) {
+                        const groupsByDate = _groupBy(results, 'x');
+                        const data = Object.keys(groupsByDate).map(date => {
+                            const group = groupsByDate[date];
+                            const min = _minBy(group, 'y');
+                            const max = _maxBy(group, 'y');
+                            return [
+                                {
+                                    x: min.timestamp,
+                                    y: min.y
+                                },
+                                {
+                                    x: max.timestamp,
+                                    y: max.y
+                                }
+                            ];
+                        });
+                        resolve(_flatten(data));
+                    } else {
+                        resolve(results);
                     }
                 })
                 .catch(error => {
@@ -144,6 +176,10 @@ const EthereumAPIService = svc = {
         });
     },
     getHistoricalPriceInfoLastNDays (daysBack) {
+        if (cachedHistoricalPriceInfo && moment().subtract('5', 'minutes').isBefore(lastCachedPriceInfoDate)) {
+            return Promise.resolve(cachedHistoricalPriceInfo);
+        }
+
         return new Promise((resolve, reject) => {
             MongooseService
                 .find(priceModel, {
@@ -154,17 +190,45 @@ const EthereumAPIService = svc = {
                 })
                 .then(prices => {
                     if (prices && prices.length > 0) {
-                        resolve(prices.map(price => {
+                        return prices.map(price => {
+                            if (Maybe.of(price.RAW.ETH.USD).isNothing()) {
+                                return null;
+                            }
                             return {
-                                y                   : price.RAW.ETH.BTC.PRICE,
+                                y                   : price.RAW.ETH.USD.PRICE,
                                 x                   : moment(price[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
-                                USD                 : price.RAW.ETH.USD.PRICE,
-                                [DOMAIN_PROPERTY.ID]: price[DOMAIN_PROPERTY.ID]
-
+                                [DOMAIN_PROPERTY.ID]: price[DOMAIN_PROPERTY.ID],
+                                timestamp           : price[DOMAIN_PROPERTY.CREATED_DATE]
                             };
-                        }));
+                        }).filter(price => !!price);
                     } else {
-                        resolve([]);
+                        return [];
+                    }
+                })
+                .then(results => {
+                    if (results.length > 0) {
+                        const groupsByDate = _groupBy(results, 'x');
+                        const data = Object.keys(groupsByDate).map(date => {
+                            const group = groupsByDate[date];
+                            const min = _minBy(group, 'y');
+                            const max = _maxBy(group, 'y');
+                            return [
+                                {
+                                    x: min.timestamp,
+                                    y: min.y
+                                },
+                                {
+                                    x: max.timestamp,
+                                    y: max.y
+                                }
+                            ];
+                        });
+                        logger.info('Setting new cached historical price info');
+                        lastCachedPriceInfoDate = new Date();
+                        cachedHistoricalPriceInfo = _flatten(data);
+                        resolve(cachedHistoricalPriceInfo);
+                    } else {
+                        resolve(results);
                     }
                 })
                 .catch(error => {
