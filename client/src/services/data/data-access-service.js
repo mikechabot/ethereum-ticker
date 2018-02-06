@@ -28,12 +28,14 @@ const _request = (method, url, data, responseType) => {
                 resolve(response.data);
             })
             .catch(error => {
-                if (Maybe.of(error.response.data).join() === 'CACHE: Cache not ready') {
-                    return resolve({__status: Maybe.of(error.response.data).join()});
+                const maybeError = Maybe.of(error);
+                const responseData = maybeError.path('response.data');
+                if (responseData.join() === 'CACHE: Cache not ready') {
+                    return resolve({__status: responseData.join()});
                 } else {
-                    if (!error) {
+                    if (!maybeError.isNothing()) {
                         error = new Error('An unknown error occurred');
-                    } else if (!error.message) {
+                    } else if (maybeError.prop('message').isNothing()) {
                         error.message = `${error.status} ${error.statusText}`;
                     }
                     reject(error);
