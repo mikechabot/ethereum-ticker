@@ -29,6 +29,8 @@ let blockchainInterval;
 let priceInterval;
 let statsInterval;
 
+let currentEthUsdDelta = -1;
+
 const STAT_GENERATION_INTERVAL_IN_MINUTES = ConfigService.getStatRegenerationInMinutes();
 const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MINUTES;
 const STAT_GENERATION_INTERVAL_IN_MILLISECONDS = 1000 * STAT_GENERATION_INTERVAL_IN_SECONDS;
