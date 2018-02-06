@@ -10,6 +10,16 @@ import _groupBy from 'lodash/groupBy';
 import _minBy from 'lodash/minBy';
 import _maxBy from 'lodash/maxBy';
 
+const mailgun = require('mailgun-js')({apiKey: ConfigService.getMailerKey(), domain: ConfigService.getMailerDomain()});
+function _generateMessage (pendingTx) {
+    return {
+        from   : 'do-not-reply@marketmovers.io',
+        to     : 'mike.chabot@live.com, lux.mine.rig@gmail.com',
+        subject: '*Blockchain Alert* ETH pending transactions crossed above threshold',
+        html   : `Pending transaction count: <strong style="color: red">${pendingTx}</strong><br/>Configured threshold: <strong style="color: green">${ConfigService.getPendingTxThreshold()}</strong><br/><br/>This email was generated automatically by <a href="http://marketmovers.io">http://marketmovers.io</a>.`
+    };
+}
+
 const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
 const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
@@ -28,7 +38,7 @@ const apiIntervals = {
     priceInterval
 };
 
-let currentEthUsdDelta = -1;
+let lastAlertSent;
 
 const cache = new SortableMap();
 
@@ -47,6 +57,7 @@ const EthereumAPIService = svc = {
     cache,
     apiIntervals,
     statsInterval,
+    lastAlertSent,
     getBlockchainInfoFromAPI () {
         let url = ConfigService.getBlockchainAPIUrl();
         const token = ConfigService.getBlockchainAPIToken();
@@ -62,7 +73,26 @@ const EthereumAPIService = svc = {
         return new Promise((resolve, reject) => {
             svc.getBlockchainInfoFromAPI()
                 .then(blockchain => MongooseService.saveNewObject(blockchainModel, blockchain))
-                .then(resolve)
+                .then(info => {
+                    const maybeCount = Maybe.of(info.unconfirmed_count);
+                    if ((!svc.lastAlertSent || moment().subtract(15, 'minutes').isAfter(svc.lastAlertSent)) &&
+                        maybeCount.isJust() &&
+                        maybeCount.join() >= ConfigService.getPendingTxThreshold()) {
+                        mailgun
+                            .messages()
+                            .send(_generateMessage(maybeCount.join()), (error, body) => {
+                                if (error) {
+                                    return reject(error);
+                                } else {
+                                    svc.lastAlertSent = new Date();
+                                    logger.info(body);
+                                    resolve(info);
+                                }
+                            });
+                    } else {
+                        resolve(info);
+                    }
+                })
                 .catch(error => {
                     logger.error(error);
                     reject(error);

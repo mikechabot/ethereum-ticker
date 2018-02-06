@@ -38,6 +38,15 @@ export default {
     },
     getStatRegenerationInMinutes() {
         return instance.getRequiredProperty('statRegenerationInMinutes');
+    },
+    getMailerKey() {
+        return instance.getRequiredProperty('api.mailgun.key');
+    },
+    getMailerDomain() {
+        return instance.getRequiredProperty('api.mailgun.domain');
+    },
+    getPendingTxThreshold() {
+        return instance.getRequiredProperty('pendingTxThreshold');
     }
 };
 

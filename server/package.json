@@ -30,6 +30,7 @@
     "https": "^1.0.0",
     "lodash": "^4.17.4",
     "log4js": "^2.3.3",
+    "mailgun-js": "^0.14.2",
     "maybe-baby": "^0.1.0",
     "moment": "^2.18.1",
     "mongodb": "^2.2.8",
