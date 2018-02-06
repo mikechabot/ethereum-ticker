@@ -234,13 +234,7 @@ class App extends React.Component {
     _loadChartInfo (silent) {
         this.setState({
             isFetching: !silent
-        }, () => this._getAndSetChartInfo(
-            () => {
-                if (!this.interval) {
-                    this.interval = window.setInterval(() => this._loadData(true), POLL_INTERVAL_IN_SECONDS * 1000);
-                }
-            }
-        ));
+        }, () => this._getAndSetChartInfo());
     }
 
     _getAndSetChartInfo (cb) {

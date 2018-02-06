@@ -77,6 +77,7 @@ class CandlestickChart extends React.Component {
             dataPoints  : dataset.data,
             showInLegend: true
         };
+
         if (dataset.lineColor) {
             ds.lineColor = dataset.lineColor;
         }
