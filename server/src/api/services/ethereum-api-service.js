@@ -210,7 +210,10 @@ const EthereumAPIService = svc = {
                         [MongooseService.DOMAIN_PROPERTY.ID]: 1
                     }
                 })
-                .then(prices => svc.normalizePricesByTimeBasis(prices, timeBasis))
+                .then(prices => {
+                    console.log('Found Prices', prices);
+                    return svc.normalizePricesByTimeBasis(prices, timeBasis);
+                })
                 .then(normalizedPrices => svc.generateCandlestickDataFromNormalizedPrices(normalizedPrices))
                 .then(historicalPrices => {
                     logger.info(`CACHE: Caching historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
