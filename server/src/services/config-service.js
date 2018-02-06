@@ -36,17 +36,20 @@ export default {
     getPriceAPIMaxRequestsPerDay () {
         return instance.getRequiredProperty('api.cryptocompare.maxRequestsPerDay');
     },
-    getStatRegenerationInMinutes() {
+    getStatRegenerationInMinutes () {
         return instance.getRequiredProperty('statRegenerationInMinutes');
     },
-    getMailerKey() {
+    getMailerKey () {
         return instance.getRequiredProperty('api.mailgun.key');
     },
-    getMailerDomain() {
+    getMailerDomain () {
         return instance.getRequiredProperty('api.mailgun.domain');
     },
-    getPendingTxThreshold() {
+    getPendingTxThreshold () {
         return instance.getRequiredProperty('pendingTxThreshold');
+    },
+    getEmailRecipients () {
+        return instance.getRequiredProperty('emailRecipients');
     }
 };
 
