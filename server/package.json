@@ -5,7 +5,7 @@
   "scripts": {
     "start": "npm run clear && npm run build && npm run server",
     "build": "babel src -d lib",
-    "server": "node server.js",
+    "server": "node --max-old-space-size=8192 server.js",
     "clear": "rm -rf ./lib"
   },
   "repository": {
@@ -35,7 +35,8 @@
     "mongodb": "^2.2.8",
     "mongoose": "^4.11.7",
     "morgan": "^1.9.0",
-    "node-uuid": "^1.4.7"
+    "node-uuid": "^1.4.7",
+    "sortable-map": "0.0.17"
   },
   "devDependencies": {
     "eslint": "^3.18.0",

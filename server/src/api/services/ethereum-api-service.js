@@ -1,5 +1,6 @@
 import moment from 'moment';
 import Maybe from 'maybe-baby';
+import SortableMap from 'sortable-map';
 
 import DataAccessService from '../../services/data-access-service';
 import MongooseService from '../../services/mongoose-service';
@@ -8,7 +9,6 @@ import logger from '../../logger/logger';
 import _groupBy from 'lodash/groupBy';
 import _minBy from 'lodash/minBy';
 import _maxBy from 'lodash/maxBy';
-import _flatten from 'lodash/flatten';
 
 const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
@@ -17,13 +17,20 @@ const priceModel = MongooseService.MODELS.ETH_PRICE;
 
 let blockchainInterval;
 let priceInterval;
+let statsInterval;
 
-const intervals = [ blockchainInterval, priceInterval];
+const STAT_GENERATION_INTERVAL_IN_MINUTES = 25;
+const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MINUTES;
+const STAT_GENERATION_INTERVAL_IN_MILLISECONDS = 1000 * STAT_GENERATION_INTERVAL_IN_SECONDS;
+
+const apiIntervals = {
+    blockchainInterval,
+    priceInterval
+};
 
 let currentEthUsdDelta = -1;
 
-let cachedHistoricalPriceInfo;
-let lastCachedPriceInfoDate;
+const cache = new SortableMap();
 
 function __generateParameters (daysBack) {
     const params = {};
@@ -37,6 +44,9 @@ function __generateParameters (daysBack) {
 
 let svc = {};
 const EthereumAPIService = svc = {
+    cache,
+    apiIntervals,
+    statsInterval,
     getBlockchainInfoFromAPI () {
         let url = ConfigService.getBlockchainAPIUrl();
         const token = ConfigService.getBlockchainAPIToken();
@@ -62,7 +72,12 @@ const EthereumAPIService = svc = {
     getAndSavePriceInfo () {
         return new Promise((resolve, reject) => {
             svc.getPriceInfoFromAPI()
-                .then(price => MongooseService.saveNewObject(priceModel, price))
+                .then(price => {
+                    if (Maybe.of(price.RAW.ETH.BTC).isJust() &&
+                        Maybe.of(price.RAW.ETH.USD).isJust()) {
+                        return MongooseService.saveNewObject(priceModel, price);
+                    }
+                })
                 .then(resolve)
                 .catch(error => {
                     logger.error(error);
@@ -112,7 +127,7 @@ const EthereumAPIService = svc = {
                     }
 
                     resolve({
-                        BTC      : BTC.PRICE,
+                        BTC      : Maybe.of(BTC.PRICE).orElse(-1).join(),
                         USD      : USD.PRICE,
                         USD_delta: currentEthUsdDelta
                     });
@@ -123,8 +138,29 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getHistoricalBlockchainInfo (daysBack) {
+    getHistoricalBlockchainInfo (daysBack = 1, timeBasis = 'hour') {
+        const cacheKey = `blockchain-${daysBack}-${timeBasis}`;
+        if (svc.cache.has(cacheKey)) {
+            const cached = svc.cache.find(cacheKey);
+            if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
+                logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
+                return Promise.resolve(cached.data);
+            } else {
+                logger.info(`CACHE: Cache outdated. (cacheKey: ${cacheKey})`);
+            }
+        } else {
+            logger.info(`CACHE: No cached value detected. (cacheKey: ${cacheKey})`);
+        }
+        return Promise.reject(new Error('CACHE: Cache not ready'));
+    },
+    generateHistoricalBlockchainStats (daysBack = 1, timeBasis = 'hour') {
+        const cacheKey = `blockchain-${daysBack}-${timeBasis}`;
         return new Promise((resolve, reject) => {
+            if (svc.cache.has(cacheKey)) {
+                logger.info(`CACHE: Purging historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
+                svc.cache.delete(cacheKey);
+            }
+            logger.info(`CACHE: Generating historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
             MongooseService
                 .find(blockchainModel, {
                     params: __generateParameters(daysBack),
@@ -132,42 +168,15 @@ const EthereumAPIService = svc = {
                         [MongooseService.DOMAIN_PROPERTY.ID]: 1
                     }
                 })
-                .then(blockInfos => {
-                    if (blockInfos && blockInfos.length > 0) {
-                        return blockInfos.map(blockInfo => {
-                            return {
-                                y                   : blockInfo.unconfirmed_count,
-                                x                   : moment(blockInfo[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
-                                [DOMAIN_PROPERTY.ID]: blockInfo[DOMAIN_PROPERTY.ID],
-                                timestamp           : blockInfo[DOMAIN_PROPERTY.CREATED_DATE]
-                            };
-                        }).filter(info => info.y > 100);
-                    } else {
-                        return [];
-                    }
-                })
-                .then(results => {
-                    if (results.length > 0) {
-                        const groupsByDate = _groupBy(results, 'x');
-                        const data = Object.keys(groupsByDate).map(date => {
-                            const group = groupsByDate[date];
-                            const min = _minBy(group, 'y');
-                            const max = _maxBy(group, 'y');
-                            return [
-                                {
-                                    x: min.timestamp,
-                                    y: min.y
-                                },
-                                {
-                                    x: max.timestamp,
-                                    y: max.y
-                                }
-                            ];
-                        });
-                        resolve(_flatten(data));
-                    } else {
-                        resolve(results);
-                    }
+                .then(blockchainInfos => svc.normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
+                .then(normalizedBlockchainInfos => svc.generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
+                .then(historicalBlockchainInfo => {
+                    logger.info(`CACHE: Caching historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
+                    svc.cache.add(cacheKey, {
+                        [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
+                        data                          : historicalBlockchainInfo
+                    });
+                    resolve(historicalBlockchainInfo);
                 })
                 .catch(error => {
                     logger.error(error);
@@ -175,12 +184,14 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getHistoricalPriceInfoLastNDays (daysBack) {
-        if (cachedHistoricalPriceInfo && moment().subtract('5', 'minutes').isBefore(lastCachedPriceInfoDate)) {
-            return Promise.resolve(cachedHistoricalPriceInfo);
-        }
-
+    generateHistoricalPriceStats (daysBack = 1, timeBasis = 'hour') {
+        const cacheKey = `price-${daysBack}-${timeBasis}`;
         return new Promise((resolve, reject) => {
+            if (svc.cache.has(cacheKey)) {
+                logger.info(`CACHE: Purging historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
+                svc.cache.delete(cacheKey);
+            }
+            logger.info(`CACHE: Generating historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
             MongooseService
                 .find(priceModel, {
                     params: __generateParameters(daysBack),
@@ -188,48 +199,15 @@ const EthereumAPIService = svc = {
                         [MongooseService.DOMAIN_PROPERTY.ID]: 1
                     }
                 })
-                .then(prices => {
-                    if (prices && prices.length > 0) {
-                        return prices.map(price => {
-                            if (Maybe.of(price.RAW.ETH.USD).isNothing()) {
-                                return null;
-                            }
-                            return {
-                                y                   : price.RAW.ETH.USD.PRICE,
-                                x                   : moment(price[DOMAIN_PROPERTY.CREATED_DATE]).startOf('hour'),
-                                [DOMAIN_PROPERTY.ID]: price[DOMAIN_PROPERTY.ID],
-                                timestamp           : price[DOMAIN_PROPERTY.CREATED_DATE]
-                            };
-                        }).filter(price => !!price);
-                    } else {
-                        return [];
-                    }
-                })
-                .then(results => {
-                    if (results.length > 0) {
-                        const groupsByDate = _groupBy(results, 'x');
-                        const data = Object.keys(groupsByDate).map(date => {
-                            const group = groupsByDate[date];
-                            const min = _minBy(group, 'y');
-                            const max = _maxBy(group, 'y');
-                            return [
-                                {
-                                    x: min.timestamp,
-                                    y: min.y
-                                },
-                                {
-                                    x: max.timestamp,
-                                    y: max.y
-                                }
-                            ];
-                        });
-                        logger.info('Setting new cached historical price info');
-                        lastCachedPriceInfoDate = new Date();
-                        cachedHistoricalPriceInfo = _flatten(data);
-                        resolve(cachedHistoricalPriceInfo);
-                    } else {
-                        resolve(results);
-                    }
+                .then(prices => svc.normalizePricesByTimeBasis(prices, timeBasis))
+                .then(normalizedPrices => svc.generateCandlestickDataFromNormalizedPrices(normalizedPrices))
+                .then(historicalPrices => {
+                    logger.info(`CACHE: Caching historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
+                    svc.cache.add(cacheKey, {
+                        [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
+                        data                          : historicalPrices
+                    });
+                    resolve(historicalPrices);
                 })
                 .catch(error => {
                     logger.error(error);
@@ -237,11 +215,129 @@ const EthereumAPIService = svc = {
                 });
         });
     },
+    normalizeBlockchainInfosByTimeBase (blockInfos, timeBasis = 'hour') {
+        if (!blockInfos || blockInfos.length === 0) {
+            return [];
+        } else {
+            return blockInfos.map(blockInfo => {
+                return {
+                    y                             : blockInfo.unconfirmed_count,
+                    x                             : moment(blockInfo[DOMAIN_PROPERTY.CREATED_DATE]).startOf(timeBasis),
+                    [DOMAIN_PROPERTY.ID]          : blockInfo[DOMAIN_PROPERTY.ID],
+                    [DOMAIN_PROPERTY.CREATED_DATE]: blockInfo[DOMAIN_PROPERTY.CREATED_DATE]
+                };
+            }).filter(info => info.y > 100);
+        }
+    },
+    normalizePricesByTimeBasis (prices, timeBasis = 'hour') {
+        if (!prices || prices.length === 0) {
+            return [];
+        } else {
+            return prices.map(price => {
+                if (Maybe.of(price.RAW.ETH.USD).isNothing()) {
+                    return null;
+                }
+                return {
+                    y                             : price.RAW.ETH.USD.PRICE,
+                    x                             : moment(price[DOMAIN_PROPERTY.CREATED_DATE]).startOf(timeBasis),
+                    [DOMAIN_PROPERTY.ID]          : price[DOMAIN_PROPERTY.ID],
+                    [DOMAIN_PROPERTY.CREATED_DATE]: price[DOMAIN_PROPERTY.CREATED_DATE]
+                };
+            }).filter(price => !!price);
+        }
+    },
+    generateLineDataFromBlockchainInfos (normalizedBlockchainInfos) {
+        if (!normalizedBlockchainInfos || normalizedBlockchainInfos.length === 0) {
+            return [];
+        } else {
+            const groupsByDate = _groupBy(normalizedBlockchainInfos, 'x');
+            return Object.keys(groupsByDate).map(date => {
+                const group = groupsByDate[date];
+                const max = _maxBy(group, 'y');
+                return {
+                    x: date,
+                    y: max.y
+                };
+            });
+        }
+    },
+    generateCandlestickDataFromNormalizedPrices (normalizedPrices) {
+        if (!normalizedPrices || normalizedPrices.length === 0) {
+            return [];
+        } else {
+            const pricesByDate = _groupBy(normalizedPrices, 'x');
+            return Object.keys(pricesByDate).map(date => {
+                const group = pricesByDate[date];
+
+                const open = _minBy(group, DOMAIN_PROPERTY.CREATED_DATE);
+                const low = _minBy(group, 'y');
+                const high = _maxBy(group, 'y');
+                const close = _maxBy(group, DOMAIN_PROPERTY.CREATED_DATE);
+
+                return {
+                    x: date,
+                    y: [open.y, high.y, low.y, close.y]
+                };
+            });
+        }
+    },
+    getHistoricalPriceInfoLastNDays (daysBack = 1, timeBasis = 'hour') {
+        const cacheKey = `price-${daysBack}-${timeBasis}`;
+        if (svc.cache.has(cacheKey)) {
+            const cached = svc.cache.find(cacheKey);
+            if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
+                logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
+                return Promise.resolve(cached.data);
+            } else {
+                logger.info(`CACHE: Cache outdated. (cacheKey: ${cacheKey})`);
+            }
+        } else {
+            logger.info(`CACHE: No cached value detected. (cacheKey: ${cacheKey})`);
+        }
+        return Promise.reject(new Error('CACHE: Cache not ready'));
+    },
+    generateHistoricalStatistics () {
+        Promise
+            .all([
+                svc.generateHistoricalPriceStats(1, 'hour'),
+                svc.generateHistoricalBlockchainStats(1, 'hour')
+            ])
+            .then(() => Promise.all([
+                svc.generateHistoricalPriceStats(3, 'hour'),
+                svc.generateHistoricalBlockchainStats(3, 'hour')
+            ]))
+            .then(() => Promise.all([
+                svc.generateHistoricalPriceStats(7, 'hour'),
+                svc.generateHistoricalBlockchainStats(7, 'hour')
+            ]))
+            .then(() => Promise.all([
+                svc.generateHistoricalPriceStats(1, 'minute'),
+                svc.generateHistoricalBlockchainStats(1, 'minute')
+            ]))
+            .then(() => Promise.all([
+                svc.generateHistoricalPriceStats(3, 'minute'),
+                svc.generateHistoricalBlockchainStats(3, 'minute')
+            ]))
+            .then(() => Promise.all([
+                svc.generateHistoricalPriceStats(7, 'minute'),
+                svc.generateHistoricalBlockchainStats(7, 'minute')
+            ]))
+            .then(() => {
+                if (!svc.statsInterval) {
+                    logger.info('Scheduling future statistics generations');
+                    logger.info(`Regeneration every ${STAT_GENERATION_INTERVAL_IN_MINUTES} min(s) ${STAT_GENERATION_INTERVAL_IN_SECONDS} secs`);
+                    svc.statsInterval = setInterval(svc.generateHistoricalStatistics, STAT_GENERATION_INTERVAL_IN_MILLISECONDS);
+                }
+            })
+            .catch(error => {
+                logger.error(error);
+            });
+    },
     startPolling () {
         svc.startPollingWithConfigs([
             {
                 key           : 'blockchain',
-                interval      : blockchainInterval,
+                interval      : apiIntervals.blockchainInterval,
                 url           : ConfigService.getBlockchainAPIUrl(),
                 token         : ConfigService.getBlockchainAPIToken(),
                 requestsPerDay: ConfigService.getBlockchainAPIMaxRequestsPerDay(),
@@ -249,7 +345,7 @@ const EthereumAPIService = svc = {
             },
             {
                 key           : 'price',
-                interval      : priceInterval,
+                interval      : apiIntervals.priceInterval,
                 url           : ConfigService.getPriceAPIUrl(),
                 requestsPerDay: ConfigService.getPriceAPIMaxRequestsPerDay(),
                 promise       : svc.getAndSavePriceInfo
@@ -264,12 +360,13 @@ const EthereumAPIService = svc = {
                     svc.startPollingWithConfig(config, index);
                 }
             });
+            logger.info('************************************************');
         }
     },
     startPollingWithConfig (config, index = 0) {
         if (!config.interval) {
             const requestsPerSec = (60 * 60 * 24) / config.requestsPerDay;
-            logger.info('');
+            logger.info('************************************************');
             logger.info(`Starting ETH ${config.key} polling (Interval #${index + 1})`);
             logger.info(`Using API @ ${config.url}`);
             logger.info(`Maximum requests per day: ${config.requestsPerDay}`);
@@ -282,7 +379,8 @@ const EthereumAPIService = svc = {
         }
     },
     stopPolling () {
-        intervals.forEach((interval, index) => {
+        Object.keys(svc.apiIntervals).forEach(key => {
+            const interval = apiIntervals[key];
             if (interval) {
                 logger.info(`Stopping ETH polling interval #${index + 1}`);
                 clearInterval(blockchainInterval);

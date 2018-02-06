@@ -9,6 +9,7 @@ import { INITIAL_STATE } from './common/app-const';
 import 'babel-polyfill';
 import './scss/style.scss';
 import 'lodash';
+import './third-party/canvasjs-2.0/canvasjs.min';
 
 const store = configureStore(INITIAL_STATE);
 

@@ -91,9 +91,9 @@ const StartupService = {
         return new Promise((resolve) => {
             const application = express();
 
-            application.use(morgan('combined', {
-                stream: { write: str => logger.info(str) }
-            }));
+            // application.use(morgan('combined', {
+            //     stream: { write: str => logger.info(str) }
+            // }));
 
             const whitelist = ConfigService.getWhitelist();
 
@@ -148,21 +148,24 @@ const StartupService = {
                     ConfigService.getPort(),
                     () => {
                         logger.info(`Express started. Listening on ${ConfigService.getPort()}`);
-                        _startPollingAPIs();
+                        _startAPIService();
                     }
                 );
         });
     }
 };
 
-function _startPollingAPIs () {
+function _startAPIService () {
     const EthereumAPIService = require('../api/services/ethereum-api-service').default;
     logger.info('');
-    logger.info('**************************************');
-    logger.info('Starting polling in 5 seconds');
-    logger.info('**************************************');
+    logger.info('************************************************');
+    logger.info('| Starting polling in 5 seconds                |');
+    logger.info('************************************************');
+    logger.info('| Starting statistics generation in 10 seconds |');
+    logger.info('************************************************');
     logger.info('');
     setTimeout(EthereumAPIService.startPolling, 5000);
+    setTimeout(EthereumAPIService.generateHistoricalStatistics, 10000);
 }
 
 function _getMongoDbVersion () {

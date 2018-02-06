@@ -7,6 +7,7 @@ function Hero ({
     iconPrefix,
     theme,
     title,
+    link,
     subtitle
 }) {
     return (
@@ -18,7 +19,9 @@ function Hero ({
                             icon
                                 ? (
                                     <span>
-                                        <Icon icon={icon} prefix={iconPrefix} />&nbsp;
+                                        <a href={link}>
+                                            <Icon icon={icon} prefix={iconPrefix} />&nbsp;
+                                        </a>
                                     </span>
                                 )
                                 : null
@@ -29,7 +32,7 @@ function Hero ({
                         subtitle
                             ? (
                                 <h2 className="subtitle">
-                                    Data-driven insights on the Ethereum blockchain
+                                    { subtitle }
                                 </h2>
                             )
                             : null

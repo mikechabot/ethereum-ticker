@@ -1,14 +1,21 @@
+@import url('https://fonts.googleapis.com/css?family=Inconsolata:400,700');
+
 @import "../../node_modules/bulma/sass/utilities/initial-variables";
 @import "../../node_modules/bulma/sass/utilities/functions";
 
+
+$family-serif: "Inconsolata", "Arial", serif;
+
 @import "../../node_modules/bulma/bulma";
 @import "common";
+
+$font-stack: 'Inconsolata', 'Arial', sans-serif;
 
 body,
 html {
   @include full-height;
   @include margin(0px);
-  font: $font-stack;
+  font-family: $font-stack;
 }
 
 #ethereum-ticker {
