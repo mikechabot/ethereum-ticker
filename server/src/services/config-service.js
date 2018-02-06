@@ -35,6 +35,9 @@ export default {
     },
     getPriceAPIMaxRequestsPerDay () {
         return instance.getRequiredProperty('api.cryptocompare.maxRequestsPerDay');
+    },
+    getStatRegenerationInMinutes() {
+        return instance.getRequiredProperty('statRegenerationInMinutes');
     }
 };
 

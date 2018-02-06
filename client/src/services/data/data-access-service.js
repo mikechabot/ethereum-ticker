@@ -1,5 +1,6 @@
 import AjaxService from './ajax-service';
 import {HTTP_METHOD, REQUEST_HEADERS, RESPONSE_TYPE} from '../../common/data-access-const';
+import Maybe from 'maybe-baby';
 
 /**
  * HTTP service capable of performing GET and POST requests
@@ -27,12 +28,16 @@ const _request = (method, url, data, responseType) => {
                 resolve(response.data);
             })
             .catch(error => {
-                if (!error) {
-                    error = new Error('An unknown error occurred');
-                } else if (!error.message) {
-                    error.message = `${error.status} ${error.statusText}`;
+                if (Maybe.of(error.response.data).join() === 'CACHE: Cache not ready') {
+                    return resolve({__status: Maybe.of(error.response.data).join()});
+                } else {
+                    if (!error) {
+                        error = new Error('An unknown error occurred');
+                    } else if (!error.message) {
+                        error.message = `${error.status} ${error.statusText}`;
+                    }
+                    reject(error);
                 }
-                reject(error);
             });
     });
 };

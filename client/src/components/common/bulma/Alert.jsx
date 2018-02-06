@@ -5,15 +5,16 @@ import Icon from '../Icon';
 function Alert ({
     onClick,
     className,
-    content
+    content,
+    icon
 }) {
     return (
-        <Flex hAlignCenter className={`notification ${className}`}>
+        <Flex hAlignCenter className={`notification ${className || 'is-danger'}`}>
             <button
                 className="delete"
                 onClick={onClick}
             />
-            <Icon icon="exclamation-triangle" />&nbsp;
+            <Icon icon={icon || 'exclamation-triangle'} />&nbsp;
             { content }
         </Flex>
     );

@@ -1,4 +1,5 @@
 import React from 'react';
+import Maybe from 'maybe-baby';
 import { withRouter } from 'react-router-dom';
 import Hero from './common/bulma/Hero';
 import Footer from './common/bulma/Footer';
@@ -99,6 +100,20 @@ class App extends React.Component {
                     />
                 </div>
 
+            );
+        }
+        if (this.state.isCachingBlockchainInfo || this.state.isCachingPriceInfo) {
+            return (
+                <Alert
+                    className="is-info"
+                    onClick={this._tryAgain}
+                    content={(
+                        <span>
+                        Generating a fresh report, please wait.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
+                        </span>
+                    )}
+                    icon="info-circle"
+                />
             );
         }
         return (
@@ -235,15 +250,34 @@ class App extends React.Component {
                 EthereumService.getHistoricalPriceInfo(this.state.daysBack, this.state.timeBasis)
             ])
             .then(values => {
+                let isCachingBlockchainInfo = false;
+                let isCachingPriceInfo = false;
+                let updatedBlockchainInfo = this.state.historicalBlockchainInfo;
+                let updatedPriceInfo = this.state.historicalPriceInfo;
+
+                if (Maybe.of(values[0]).prop('__status').isNothing()) {
+                    updatedBlockchainInfo = values[0];
+                } else {
+                    isCachingBlockchainInfo = true;
+                }
+
+                if (Maybe.of(values[1]).prop('__status').isNothing()) {
+                    updatedPriceInfo = values[1];
+                } else {
+                    isCachingPriceInfo = true;
+                }
+
                 this.setState({
-                    historicalBlockchainInfo: values[0],
-                    historicalPriceInfo     : values[1],
+                    historicalBlockchainInfo: updatedBlockchainInfo,
+                    historicalPriceInfo     : updatedPriceInfo,
+                    isCachingPriceInfo,
+                    isCachingBlockchainInfo,
                     isFetching              : false
                 }, cb);
             })
             .catch(error => {
-                this.setState({ error: true, isFetching: false });
                 console.log(error);
+                this.setState({ error: true, isFetching: false });
             });
     }
 }
