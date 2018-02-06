@@ -14,7 +14,7 @@ const mailgun = require('mailgun-js')({apiKey: ConfigService.getMailerKey(), dom
 function _generateMessage (pendingTx) {
     return {
         from   : 'do-not-reply@marketmovers.io',
-        to     : 'mike.chabot@live.com, lux.mine.rig@gmail.com',
+        to     : 'mike.chabot@live.com, greglatouf@gmail.com, david.l737@gmail.com',
         subject: '*Blockchain Alert* ETH pending transactions crossed above threshold',
         html   : `Pending transaction count: <strong style="color: red">${pendingTx}</strong><br/>Configured threshold: <strong style="color: green">${ConfigService.getPendingTxThreshold()}</strong><br/><br/>This email was generated automatically by <a href="http://marketmovers.io">http://marketmovers.io</a>.`
     };
