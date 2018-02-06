@@ -244,6 +244,7 @@ const EthereumAPIService = svc = {
         if (!prices || prices.length === 0) {
             return [];
         } else {
+            console.log(Array.isArray(prices), prices);
             return prices.map(price => {
                 if (Maybe.of(price.RAW.ETH.USD).isNothing()) {
                     return null;
