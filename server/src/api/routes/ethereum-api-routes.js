@@ -1,8 +1,8 @@
 const PATH = {
     ETH_PRICE_CURRENT        : '/api/eth/price',
-    ETH_PRICE_HISTORICAL     : '/api/eth/price/:daysBack',
+    ETH_PRICE_HISTORICAL     : '/api/eth/price/history',
     ETH_BLOCKCHAIN_CURRENT   : '/api/eth/blockchain',
-    ETH_BLOCKCHAIN_HISTORICAL: '/api/eth/blockchain/:daysBack'
+    ETH_BLOCKCHAIN_HISTORICAL: '/api/eth/blockchain/history'
 };
 
 export default {

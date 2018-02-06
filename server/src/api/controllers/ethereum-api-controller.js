@@ -1,6 +1,7 @@
 import EthereumAPIService from '../services/ethereum-api-service';
 
-const ALLOWED_DAYS_BACK = ['1', '3', '7', '14', '30', '60', '90', '120', '365'];
+const ALLOWED_DAYS_BACK = ['1', '3', '7'];
+const ALLOWED_TIME_BASIS = ['minute', 'hour'];
 
 const EthereumAPIController = {
     handleGetCurrentBlockchainInfo (request, response, next) {
@@ -16,34 +17,40 @@ const EthereumAPIController = {
             .catch(error => next(error));
     },
     handleGetHistoricalBlockchainInfo (request, response, next) {
-        const { params } = request;
-        if (!params || !params.daysBack) {
+        const { query } = request;
+        if (!query || !query.daysBack || !query.timeBasis) {
             return next(new Error('Missing required params'));
         }
-
-        const { daysBack } = params;
+        const { daysBack, timeBasis } = query;
 
         if (!ALLOWED_DAYS_BACK.includes(daysBack)) {
-            return next(new Error('Invalid daysBack param'));
+            return next(new Error('Invalid daysBack query'));
         }
+        if (!ALLOWED_TIME_BASIS.includes(timeBasis)) {
+            return next(new Error('Invalid time basis query'));
+        }
+
         EthereumAPIService
-            .getHistoricalBlockchainInfo(daysBack)
+            .getHistoricalBlockchainInfo(daysBack, timeBasis)
             .then(data => response.json(data))
             .catch(error => next(error));
     },
     handleGetHistoricalPriceInfo (request, response, next) {
-        const { params } = request;
-        if (!params || !params.daysBack) {
+        const { query } = request;
+        if (!query || !query.daysBack || !query.timeBasis) {
             return next(new Error('Missing required params'));
         }
-
-        const { daysBack } = params;
+        const { daysBack, timeBasis } = query;
 
         if (!ALLOWED_DAYS_BACK.includes(daysBack)) {
-            return next(new Error('Invalid daysBack param'));
+            return next(new Error('Invalid daysBack query'));
         }
+        if (!ALLOWED_TIME_BASIS.includes(timeBasis)) {
+            return next(new Error('Invalid time basis query'));
+        }
+
         EthereumAPIService
-            .getHistoricalPriceInfoLastNDays(daysBack)
+            .getHistoricalPriceInfoLastNDays(daysBack, timeBasis)
             .then(data => response.json(data))
             .catch(error => next(error));
     }

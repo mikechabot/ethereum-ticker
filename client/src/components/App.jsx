@@ -10,11 +10,15 @@ import Alert from './common/bulma/Alert';
 import {Flex} from './common/glamorous/Flex';
 
 const POLL_INTERVAL_IN_SECONDS = 10;
+const DAYS_BACK = [1, 3, 7];
+const TIME_BASIS = ['hour', 'minute'];
 
 class App extends React.Component {
     constructor (props) {
         super(props);
         this.state = {
+            daysBack                : 1,
+            timeBasis               : 'hour',
             isFetching              : true,
             historicalBlockchainInfo: null,
             historicalPriceInfo     : null
@@ -44,12 +48,10 @@ class App extends React.Component {
                 flexShrink={0}
                 justifyContent="space-between">
                 { this._renderHeader() }
-                <div className="m-large">
+                <div className="m-top--large">
                     <PriceLevel />
                 </div>
                 <div className="m-large" style={{height: '100%'}}>
-                    <br />
-                    <br />
                     { this._renderChart() }
                 </div>
                 <div>
@@ -101,6 +103,10 @@ class App extends React.Component {
         }
         return (
             <div style={{height: '100%'}}>
+                <Flex justifyContent="space-between">
+                    { this._renderDaysBackButtons() }
+                    { this._renderTimeBasis() }
+                </Flex>
                 <CandlestickChart
                     id="eth-usd-chart"
                     height={600}
@@ -152,6 +158,49 @@ class App extends React.Component {
         );
     }
 
+    _renderDaysBackButtons () {
+        return (
+            <div className="buttons has-addons">
+                {
+                    DAYS_BACK.map(dayBack => {
+                        return (
+                            <span key={dayBack} onClick={() => {
+                                if (this.state.daysBack !== dayBack) {
+                                    this.setState({daysBack: dayBack}, () => this._fetchNewData());
+                                }
+                            }} className={`button ${this.state.daysBack === dayBack ? 'is-dark is-selected' : ''}`}>{dayBack} day
+                            </span>
+                        );
+                    })
+                }
+            </div>
+        );
+    }
+
+    _renderTimeBasis () {
+        return (
+            <div className="buttons has-addons">
+                {
+                    TIME_BASIS.map(timeBasis => {
+                        return (
+                            <span key={timeBasis} onClick={() => {
+                                if (this.state.timeBasis !== timeBasis) {
+                                    this.setState({timeBasis: timeBasis}, () => this._fetchNewData());
+                                }
+                            }} className={`button ${this.state.timeBasis === timeBasis ? 'is-dark is-selected' : ''}`}>
+                                {timeBasis}
+                            </span>
+                        );
+                    })
+                }
+            </div>
+        );
+    }
+
+    _fetchNewData () {
+        this._tryAgain();
+    }
+
     _tryAgain () {
         if (this.interval) {
             window.clearInterval(this.interval);
@@ -182,8 +231,8 @@ class App extends React.Component {
     _getAndSetChartInfo (cb) {
         Promise
             .all([
-                EthereumService.getHistoricalBlockchainInfo(1),
-                EthereumService.getHistoricalPriceInfo(1)
+                EthereumService.getHistoricalBlockchainInfo(this.state.daysBack, this.state.timeBasis),
+                EthereumService.getHistoricalPriceInfo(this.state.daysBack, this.state.timeBasis)
             ])
             .then(values => {
                 this.setState({
