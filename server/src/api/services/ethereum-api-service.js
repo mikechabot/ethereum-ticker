@@ -75,7 +75,18 @@ const EthereumAPIService = svc = {
                 .then(price => {
                     if (Maybe.of(price.RAW.ETH.BTC).isJust() &&
                         Maybe.of(price.RAW.ETH.USD).isJust()) {
-                        return MongooseService.saveNewObject(priceModel, price);
+                        return MongooseService.saveNewObject(priceModel, {
+                            RAW: {
+                                ETH: {
+                                    USD: {
+                                        PRICE: Maybe.of(price.RAW.ETH.USD.PRICE).join()
+                                    },
+                                    BTC: {
+                                        PRICE: Maybe.of(price.RAW.ETH.BTC.PRICE).join()
+                                    }
+                                }
+                            }
+                        });
                     }
                 })
                 .then(resolve)
