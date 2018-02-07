@@ -1,24 +1,21 @@
 import moment from 'moment';
 import Maybe from 'maybe-baby';
 import SortableMap from 'sortable-map';
+import _groupBy from 'lodash/groupBy';
+import _minBy from 'lodash/minBy';
+import _maxBy from 'lodash/maxBy';
 
 import DataAccessService from '../../services/data-access-service';
 import MongooseService from '../../services/mongoose-service';
 import ConfigService from '../../services/config-service';
 import logger from '../../logger/logger';
-import _groupBy from 'lodash/groupBy';
-import _minBy from 'lodash/minBy';
-import _maxBy from 'lodash/maxBy';
+import MailerService from '../../services/mailer-service';
+import {ALLOWED_HOURS_BACK, ALLOWED_TIME_BASIS} from '../../common/app-const';
 
-const mailgun = require('mailgun-js')({apiKey: ConfigService.getMailerKey(), domain: ConfigService.getMailerDomain()});
-function _generateMessage (pendingTx) {
-    return {
-        from   : 'do-not-reply@marketmovers.io',
-        to     : ConfigService.getEmailRecipients(),
-        subject: '*Blockchain Alert* ETH pending transactions crossed above threshold',
-        html   : `Pending transaction count: <strong style="color: red">${pendingTx}</strong><br/>Configured threshold: <strong style="color: green">${ConfigService.getPendingTxThreshold()}</strong><br/><br/>This email was generated automatically by <a href="http://marketmovers.io">http://marketmovers.io</a>.`
-    };
-}
+const EMAIL_SUBJECT = '*Blockchain Alert* ETH pending transactions crossed above threshold';
+const EMAIL_MESSAGE = function (pendingTxs) {
+    return `Pending transaction count: <strong style="color: red">${pendingTxs}</strong><br/>Configured threshold: <strong style="color: green">${ConfigService.getPendingTxThreshold()}</strong><br/><br/>This email was generated automatically by <a href="http://marketmovers.io">http://marketmovers.io</a>.`;
+};
 
 const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
@@ -44,11 +41,11 @@ let lastAlertSent;
 
 const cache = new SortableMap();
 
-function __generateParameters (daysBack) {
+function __generateParameters (hoursBack) {
     const params = {};
-    if (daysBack) {
+    if (hoursBack) {
         params[DOMAIN_PROPERTY.CREATED_DATE] = {
-            [QUERY_PROPERTY.GREATER_THAN_OR_EQUAL]: new Date(moment().subtract(daysBack, 'days').startOf('day').toString())
+            [QUERY_PROPERTY.GREATER_THAN_OR_EQUAL]: new Date(moment().subtract(hoursBack, 'hours').startOf('hour').toString())
         };
     }
     return params;
@@ -77,19 +74,21 @@ const EthereumAPIService = svc = {
                 .then(blockchain => MongooseService.saveNewObject(blockchainModel, blockchain))
                 .then(info => {
                     const maybeCount = Maybe.of(info.unconfirmed_count);
-                    if ((!svc.lastAlertSent || moment().subtract(15, 'minutes').isAfter(svc.lastAlertSent)) &&
+                    if ((!svc.lastAlertSent || moment().subtract(ConfigService.getSendAlertInterval(), 'minutes').isAfter(svc.lastAlertSent)) &&
                         maybeCount.isJust() &&
                         maybeCount.join() >= ConfigService.getPendingTxThreshold()) {
-                        mailgun
-                            .messages()
-                            .send(_generateMessage(maybeCount.join()), (error, body) => {
-                                if (error) {
-                                    return reject(error);
-                                } else {
-                                    svc.lastAlertSent = new Date();
-                                    logger.info(body);
-                                    resolve(info);
-                                }
+                        MailerService
+                            .sendMessage(
+                                EMAIL_SUBJECT,
+                                EMAIL_MESSAGE(maybeCount.join())
+                            )
+                            .then(() => {
+                                svc.lastAlertSent = new Date();
+                                resolve(info);
+                            })
+                            .catch(error => {
+                                logger.error(error);
+                                reject(error);
                             });
                     } else {
                         resolve(info);
@@ -181,8 +180,8 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getHistoricalBlockchainInfo (daysBack = 1, timeBasis = 'hour') {
-        const cacheKey = `blockchain-${daysBack}-${timeBasis}`;
+    getHistoricalBlockchainInfo (hoursBack = 1, timeBasis = 'hour') {
+        const cacheKey = `blockchain-${hoursBack}-${timeBasis}`;
         if (svc.cache.has(cacheKey)) {
             const cached = svc.cache.find(cacheKey);
             if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
@@ -196,67 +195,85 @@ const EthereumAPIService = svc = {
         }
         return Promise.reject(new Error('CACHE: Cache not ready'));
     },
-    generateHistoricalBlockchainStats (daysBack = 1, timeBasis = 'hour') {
-        const cacheKey = `blockchain-${daysBack}-${timeBasis}`;
-        return new Promise((resolve, reject) => {
-            if (svc.cache.has(cacheKey)) {
-                logger.info(`CACHE: Purging historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-                svc.cache.delete(cacheKey);
-            }
-            logger.info(`CACHE: Generating historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-            MongooseService
-                .find(blockchainModel, {
-                    params: __generateParameters(daysBack),
-                    sort  : {
-                        [MongooseService.DOMAIN_PROPERTY.ID]: 1
-                    }
-                })
-                .then(blockchainInfos => svc.normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
-                .then(normalizedBlockchainInfos => svc.generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
-                .then(historicalBlockchainInfo => {
-                    logger.info(`CACHE: Caching historical blockchain statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-                    svc.cache.add(cacheKey, {
-                        [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
-                        data                          : historicalBlockchainInfo
+    generateHistoricalBlockchainStats (hoursBack = 1, timeBasis = 'hour', timeoutOptions) {
+        const cacheKey = `blockchain-${hoursBack}-${timeBasis}`;
+
+        const __generate = () => {
+            return new Promise((resolve, reject) => {
+                if (svc.cache.has(cacheKey)) {
+                    logger.info(`CACHE: Purging historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                    svc.cache.delete(cacheKey);
+                }
+                logger.info(`CACHE: Generating historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                MongooseService
+                    .find(blockchainModel, {
+                        params: __generateParameters(hoursBack),
+                        sort  : {
+                            [MongooseService.DOMAIN_PROPERTY.ID]: 1
+                        }
+                    })
+                    .then(blockchainInfos => svc.normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
+                    .then(normalizedBlockchainInfos => svc.generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
+                    .then(historicalBlockchainInfo => {
+                        logger.info(`CACHE: Caching historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                        svc.cache.add(cacheKey, {
+                            [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
+                            data                          : historicalBlockchainInfo
+                        });
+                        resolve(historicalBlockchainInfo);
+                    })
+                    .catch(error => {
+                        logger.error(error);
+                        reject(error);
                     });
-                    resolve(historicalBlockchainInfo);
-                })
-                .catch(error => {
-                    logger.error(error);
-                    reject(error);
-                });
-        });
+            });
+        };
+
+        if (!timeoutOptions) {
+            return __generate();
+        } else {
+            setTimeout(__generate, timeoutOptions.outer * 1000);
+        }
     },
-    generateHistoricalPriceStats (daysBack = 1, timeBasis = 'hour') {
-        const cacheKey = `price-${daysBack}-${timeBasis}`;
-        return new Promise((resolve, reject) => {
-            if (svc.cache.has(cacheKey)) {
-                logger.info(`CACHE: Purging historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-                svc.cache.delete(cacheKey);
-            }
-            logger.info(`CACHE: Generating historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-            MongooseService
-                .find(priceModel, {
-                    params: __generateParameters(daysBack),
-                    sort  : {
-                        [MongooseService.DOMAIN_PROPERTY.ID]: 1
-                    }
-                })
-                .then(prices => svc.normalizePricesByTimeBasis(prices, timeBasis))
-                .then(normalizedPrices => svc.generateCandlestickDataFromNormalizedPrices(normalizedPrices))
-                .then(historicalPrices => {
-                    logger.info(`CACHE: Caching historical price statistics. (cacheKey=${cacheKey}, daysBack=${daysBack}, timeBasis=${timeBasis})`);
-                    svc.cache.add(cacheKey, {
-                        [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
-                        data                          : historicalPrices
+    generateHistoricalPriceStats (hoursBack = 1, timeBasis = 'hour', timeoutOptions) {
+        const cacheKey = `price-${hoursBack}-${timeBasis}`;
+
+        const __generate = () => {
+            return new Promise((resolve, reject) => {
+                if (svc.cache.has(cacheKey)) {
+                    logger.info(`CACHE: Purging historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                    svc.cache.delete(cacheKey);
+                }
+                logger.info(`CACHE: Generating historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                MongooseService
+                    .find(priceModel, {
+                        params: __generateParameters(hoursBack),
+                        sort  : {
+                            [MongooseService.DOMAIN_PROPERTY.ID]: 1
+                        }
+                    })
+                    .then(prices => svc.normalizePricesByTimeBasis(prices, timeBasis))
+                    .then(normalizedPrices => svc.generateCandlestickDataFromNormalizedPrices(normalizedPrices))
+                    .then(historicalPrices => {
+                        logger.info(`CACHE: Caching historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                        svc.cache.add(cacheKey, {
+                            [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
+                            data                          : historicalPrices
+                        });
+                        resolve(historicalPrices);
+                    })
+                    .catch(error => {
+                        logger.error(error);
+                        reject(error);
                     });
-                    resolve(historicalPrices);
-                })
-                .catch(error => {
-                    logger.error(error);
-                    reject(error);
-                });
-        });
+            });
+        };
+
+        if (!timeoutOptions) {
+            return __generate();
+        } else {
+            setTimeout(__generate, timeoutOptions.outer * 1000);
+        }
     },
     normalizeBlockchainInfosByTimeBase (blockInfos, timeBasis = 'hour') {
         if (!blockInfos || blockInfos.length === 0) {
@@ -324,8 +341,8 @@ const EthereumAPIService = svc = {
             });
         }
     },
-    getHistoricalPriceInfoLastNDays (daysBack = 1, timeBasis = 'hour') {
-        const cacheKey = `price-${daysBack}-${timeBasis}`;
+    getHistoricalPriceInfoLastNDays (hoursBack = 1, timeBasis = 'hour') {
+        const cacheKey = `price-${hoursBack}-${timeBasis}`;
         if (svc.cache.has(cacheKey)) {
             const cached = svc.cache.find(cacheKey);
             if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
@@ -339,32 +356,35 @@ const EthereumAPIService = svc = {
         }
         return Promise.reject(new Error('CACHE: Cache not ready'));
     },
+    generateChartData (hoursBack, timeInterval, timeoutOptions) {
+        const BASE_DELAY_IN_SECONDS = 5;
+        const { outer, inner } = timeoutOptions;
+        return new Promise(resolve => {
+            let delay = BASE_DELAY_IN_SECONDS + (outer * 10);
+            if (inner) {
+                delay += (inner * 5);
+            }
+            logger.info(`Scheduling statistics generation in ${delay} seconds. (hoursBack=${hoursBack}, timeBasis=${timeInterval})`);
+            setTimeout(() => resolve(
+                Promise.all([
+                    svc.generateHistoricalPriceStats(hoursBack, timeInterval, timeoutOptions),
+                    svc.generateHistoricalBlockchainStats(hoursBack, timeInterval, timeoutOptions)
+                ])
+            ), delay * 1000);
+        });
+    },
     generateHistoricalStatistics () {
+        let promises = [];
+        ALLOWED_HOURS_BACK.forEach((hoursBack, hoursIndex) => {
+            ALLOWED_TIME_BASIS.forEach((timeBasis, intervalIndex) => {
+                promises = [
+                    ...promises,
+                    ...svc.generateChartData(hoursBack, timeBasis, { outer: hoursIndex, inner: intervalIndex})
+                ];
+            });
+        });
         Promise
-            .all([
-                svc.generateHistoricalPriceStats(1, 'hour'),
-                svc.generateHistoricalBlockchainStats(1, 'hour')
-            ])
-            .then(() => Promise.all([
-                svc.generateHistoricalPriceStats(3, 'hour'),
-                svc.generateHistoricalBlockchainStats(3, 'hour')
-            ]))
-            .then(() => Promise.all([
-                svc.generateHistoricalPriceStats(7, 'hour'),
-                svc.generateHistoricalBlockchainStats(7, 'hour')
-            ]))
-            .then(() => Promise.all([
-                svc.generateHistoricalPriceStats(1, 'minute'),
-                svc.generateHistoricalBlockchainStats(1, 'minute')
-            ]))
-            .then(() => Promise.all([
-                svc.generateHistoricalPriceStats(3, 'minute'),
-                svc.generateHistoricalBlockchainStats(3, 'minute')
-            ]))
-            .then(() => Promise.all([
-                svc.generateHistoricalPriceStats(7, 'minute'),
-                svc.generateHistoricalBlockchainStats(7, 'minute')
-            ]))
+            .all(promises)
             .then(() => {
                 if (!svc.statsInterval) {
                     logger.info('Scheduling future statistics generations');

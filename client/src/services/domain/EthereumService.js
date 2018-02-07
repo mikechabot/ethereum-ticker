@@ -7,11 +7,11 @@ const EthereumService = {
     getPriceInfo () {
         return DataAccessService.get('/eth/price');
     },
-    getHistoricalBlockchainInfo (daysBack, timeBasis) {
-        return DataAccessService.get('/eth/blockchain/history', { daysBack, timeBasis });
+    getHistoricalBlockchainInfo (hoursBack, timeBasis) {
+        return DataAccessService.get('/eth/blockchain/history', { hoursBack, timeBasis });
     },
-    getHistoricalPriceInfo (daysBack, timeBasis) {
-        return DataAccessService.get('/eth/price/history', { daysBack, timeBasis });
+    getHistoricalPriceInfo (hoursBack, timeBasis) {
+        return DataAccessService.get('/eth/price/history', { hoursBack, timeBasis });
     }
 };
 

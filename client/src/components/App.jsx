@@ -11,14 +11,47 @@ import Alert from './common/bulma/Alert';
 import {Flex} from './common/glamorous/Flex';
 
 const POLL_INTERVAL_IN_SECONDS = 10;
-const DAYS_BACK = [1, 3, 7];
+const HOURS_MENU = [
+    {
+        label: '1H',
+        value: 1
+    },
+    {
+        label: '3H',
+        value: 3
+    },
+    {
+        label: '6H',
+        value: 6
+    },
+    {
+        label: '12H',
+        value: 12
+    },
+    {
+        label: '1D',
+        value: 24
+    },
+    {
+        label: '3D',
+        value: 24 * 3
+    },
+    {
+        label: '7D',
+        value: 24 * 7
+    },
+    {
+        label: '30D',
+        value: 24 * 30
+    }
+];
 const TIME_BASIS = ['hour', 'minute'];
 
 class App extends React.Component {
     constructor (props) {
         super(props);
         this.state = {
-            daysBack                : 1,
+            hoursBack               : 1,
             timeBasis               : 'hour',
             isFetching              : true,
             historicalBlockchainInfo: null,
@@ -119,7 +152,7 @@ class App extends React.Component {
         return (
             <div style={{height: '100%'}}>
                 <Flex justifyContent="space-between">
-                    { this._renderDaysBackButtons() }
+                    { this._renderHoursButtons() }
                     { this._renderTimeBasis() }
                 </Flex>
                 <CandlestickChart
@@ -173,17 +206,18 @@ class App extends React.Component {
         );
     }
 
-    _renderDaysBackButtons () {
+    _renderHoursButtons () {
         return (
             <div className="buttons has-addons">
                 {
-                    DAYS_BACK.map(dayBack => {
+                    HOURS_MENU.map(hoursBack => {
                         return (
-                            <span key={dayBack} onClick={() => {
-                                if (this.state.daysBack !== dayBack) {
-                                    this.setState({daysBack: dayBack}, () => this._fetchNewData());
+                            <span key={hoursBack.value} onClick={() => {
+                                if (this.state.hoursBack !== hoursBack.value) {
+                                    this.setState({hoursBack: hoursBack.value}, () => this._fetchNewData());
                                 }
-                            }} className={`button ${this.state.daysBack === dayBack ? 'is-dark is-selected' : ''}`}>{dayBack} day
+                            }} className={`button ${this.state.hoursBack === hoursBack.value ? 'is-dark is-selected' : ''}`}>
+                                {hoursBack.label}
                             </span>
                         );
                     })
@@ -240,8 +274,8 @@ class App extends React.Component {
     _getAndSetChartInfo (cb) {
         Promise
             .all([
-                EthereumService.getHistoricalBlockchainInfo(this.state.daysBack, this.state.timeBasis),
-                EthereumService.getHistoricalPriceInfo(this.state.daysBack, this.state.timeBasis)
+                EthereumService.getHistoricalBlockchainInfo(this.state.hoursBack, this.state.timeBasis),
+                EthereumService.getHistoricalPriceInfo(this.state.hoursBack, this.state.timeBasis)
             ])
             .then(values => {
                 let isCachingBlockchainInfo = false;

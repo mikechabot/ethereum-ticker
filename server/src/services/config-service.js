@@ -45,6 +45,9 @@ export default {
     getMailerDomain () {
         return instance.getRequiredProperty('api.mailgun.domain');
     },
+    getSendAlertInterval () {
+        return instance.getRequiredProperty('sendAlertIntervalInMinutes');
+    },
     getPendingTxThreshold () {
         return instance.getRequiredProperty('pendingTxThreshold');
     },
