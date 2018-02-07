@@ -23,11 +23,12 @@ class CandlestickChart extends React.Component {
             });
         });
         this.chart = new CanvasJS.Chart(props.id, {
+            backgroundColor : 'whitesmoke',
             zoomEnabled     : true,
             height          : props.height,
             animationEnabled: false,
             theme           : this.props.theme || 'light1', // "light1", "light2", "dark1", "dark2"
-            exportEnabled   : true,
+            exportEnabled   : false,
             subtitles       : [{
                 fontFamily: 'Inconsolata',
                 text      : props.legend
@@ -77,6 +78,15 @@ class CandlestickChart extends React.Component {
             dataPoints  : dataset.data,
             showInLegend: true
         };
+
+        if (dataset.type === 'candlestick') {
+            ds.risingColor = dataset.risingColor;
+            ds.fallingColor = dataset.fallingColor;
+        }
+
+        if (dataset.color) {
+            ds.color = dataset.color;
+        }
 
         if (dataset.lineColor) {
             ds.lineColor = dataset.lineColor;

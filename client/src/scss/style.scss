@@ -3,8 +3,9 @@
 @import "../../node_modules/bulma/sass/utilities/initial-variables";
 @import "../../node_modules/bulma/sass/utilities/functions";
 
-
 $family-serif: "Inconsolata", "Arial", serif;
+$notification-radius: 0px;
+$body-background-color: hsl(0, 0%, 96%);
 
 @import "../../node_modules/bulma/bulma";
 @import "common";
@@ -69,4 +70,8 @@ html {
 
 .pointer {
   cursor: pointer;
+}
+
+.notification:not(:last-child) {
+  margin-bottom: 0;
 }

@@ -1,51 +1,18 @@
 import React from 'react';
 import Maybe from 'maybe-baby';
 import { withRouter } from 'react-router-dom';
-import Hero from './common/bulma/Hero';
-import Footer from './common/bulma/Footer';
+
 import EthereumService from '../services/domain/EthereumService';
-import Icon from './common/Icon';
+
 import CandlestickChart from './common/CandlestickChart';
 import PriceLevel from './PriceLevel';
+import Hero from './common/bulma/Hero';
+import Footer from './common/bulma/Footer';
+import Icon from './common/Icon';
 import Alert from './common/bulma/Alert';
-import {Flex} from './common/glamorous/Flex';
 
-const POLL_INTERVAL_IN_SECONDS = 10;
-const HOURS_MENU = [
-    {
-        label: '1H',
-        value: 1
-    },
-    {
-        label: '3H',
-        value: 3
-    },
-    {
-        label: '6H',
-        value: 6
-    },
-    {
-        label: '12H',
-        value: 12
-    },
-    {
-        label: '1D',
-        value: 24
-    },
-    {
-        label: '3D',
-        value: 24 * 3
-    },
-    {
-        label: '7D',
-        value: 24 * 7
-    },
-    {
-        label: '30D',
-        value: 24 * 30
-    }
-];
-const TIME_BASIS = ['hour', 'minute'];
+import {HOURS_MENU, TIME_INTERVAL} from '../common/app-const';
+import ButtonGroup from './common/bulma/ButtonGroup';
 
 class App extends React.Component {
     constructor (props) {
@@ -76,22 +43,15 @@ class App extends React.Component {
 
     render () {
         return (
-            <Flex
-                column
-                flex={1}
-                flexShrink={0}
-                justifyContent="space-between">
+            <div style={{width: '100%'}}>
                 { this._renderHeader() }
-                <div className="m-top--large">
-                    <PriceLevel />
-                </div>
-                <div className="m-large" style={{height: '100%'}}>
-                    { this._renderChart() }
-                </div>
+                <PriceLevel />
+                { this._renderChartControls() }
+                { this._renderChart() }
                 <div>
                     <Footer />
                 </div>
-            </Flex>
+            </div>
         );
     }
 
@@ -100,7 +60,7 @@ class App extends React.Component {
             <div>
                 <Hero
                     link="http://marketmovers.io"
-                    theme="dark"
+                    theme="light"
                     title="marketmovers.io"
                     subtitle="Data-driven insights on the Ethereum blockchain"
                     icon="ethereum"
@@ -110,51 +70,69 @@ class App extends React.Component {
         );
     }
 
+    _renderChartControls () {
+        return (
+            <nav className="level notification light">
+                <div className="level-item has-text-centered">
+                    <div>{ this._renderHoursButtons() }</div>
+                    &nbsp;
+                    &nbsp;
+                    <div>{ this._renderTimeBasis() }</div>
+                </div>
+            </nav>
+        );
+    }
+
+    _renderIsFetchingChart () {
+        return (
+            <div className="notification light has-text-centered">
+                <Icon icon="cog fa-spin fa-5x" prefix="fas" />
+            </div>
+        );
+    }
+
+    _renderFetchingError () {
+        return (
+            <Alert
+                className="is-danger"
+                onClick={this._tryAgain}
+                content={(
+                    <span>
+                            Unable to fetch historical data.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
+                    </span>
+                )}
+                icon="exclamation-triangle"
+            />
+        );
+    }
+
+    _renderCacheNotReady () {
+        return (
+            <Alert
+                className="is-info"
+                onClick={this._tryAgain}
+                content={(
+                    <span>
+                        Generating a fresh report, please wait.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
+                    </span>
+                )}
+                icon="info-circle"
+            />
+        );
+    }
+
     _renderChart () {
         if (this.state.isFetching) {
-            return (
-                <div className="has-text-centered" style={{height: '100%'}}>
-                    <Icon icon="cog fa-spin fa-5x" prefix="fas" />
-                </div>
-            );
+            return this._renderIsFetchingChart();
         }
         if (this.state.error) {
-            return (
-                <div style={{height: '100%'}}>
-                    <Alert
-                        className="is-danger"
-                        onClick={this._tryAgain}
-                        content={(
-                            <span>
-                                Unable to fetch historical data.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
-                            </span>
-                        )}
-                        icon="exclamation-triangle"
-                    />
-                </div>
-
-            );
+            return this._renderFetchingError();
         }
         if (this.state.isCachingBlockchainInfo || this.state.isCachingPriceInfo) {
-            return (
-                <Alert
-                    className="is-info"
-                    onClick={this._tryAgain}
-                    content={(
-                        <span>
-                        Generating a fresh report, please wait.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
-                        </span>
-                    )}
-                    icon="info-circle"
-                />
-            );
+            return this._renderCacheNotReady();
         }
         return (
-            <div style={{height: '100%'}}>
-                <Flex justifyContent="space-between">
-                    { this._renderHoursButtons() }
-                    { this._renderTimeBasis() }
-                </Flex>
+            <div>
                 <CandlestickChart
                     id="eth-usd-chart"
                     height={600}
@@ -185,7 +163,10 @@ class App extends React.Component {
                     }}
                     datasets={[
                         {
+                            color             : '#4a4a4a',
                             type              : 'candlestick',
+                            risingColor       : '#23d260',
+                            fallingColor      : '#ff3860',
                             label             : 'ETH/USD',
                             data              : this.state.historicalPriceInfo,
                             yValueFormatString: '$#,##0.00',
@@ -193,6 +174,7 @@ class App extends React.Component {
                         },
                         {
                             type              : 'line',
+                            color             : '#3273dd',
                             showInLegend      : true,
                             label             : 'Pending Txs',
                             axisYType         : 'secondary',
@@ -208,41 +190,25 @@ class App extends React.Component {
 
     _renderHoursButtons () {
         return (
-            <div className="buttons has-addons">
-                {
-                    HOURS_MENU.map(hoursBack => {
-                        return (
-                            <span key={hoursBack.value} onClick={() => {
-                                if (this.state.hoursBack !== hoursBack.value) {
-                                    this.setState({hoursBack: hoursBack.value}, () => this._fetchNewData());
-                                }
-                            }} className={`button ${this.state.hoursBack === hoursBack.value ? 'is-dark is-selected' : ''}`}>
-                                {hoursBack.label}
-                            </span>
-                        );
-                    })
-                }
-            </div>
+            <ButtonGroup
+                items={HOURS_MENU}
+                activeKey={this.state.hoursBack}
+                onClick={hoursBack => {
+                    this.setState({hoursBack: hoursBack}, () => this._fetchNewData());
+                }}
+            />
         );
     }
 
     _renderTimeBasis () {
         return (
-            <div className="buttons has-addons">
-                {
-                    TIME_BASIS.map(timeBasis => {
-                        return (
-                            <span key={timeBasis} onClick={() => {
-                                if (this.state.timeBasis !== timeBasis) {
-                                    this.setState({timeBasis: timeBasis}, () => this._fetchNewData());
-                                }
-                            }} className={`button ${this.state.timeBasis === timeBasis ? 'is-dark is-selected' : ''}`}>
-                                {timeBasis}
-                            </span>
-                        );
-                    })
-                }
-            </div>
+            <ButtonGroup
+                items={TIME_INTERVAL}
+                activeKey={this.state.timeBasis}
+                onClick={timeBasis => {
+                    this.setState({timeBasis: timeBasis}, () => this._fetchNewData());
+                }}
+            />
         );
     }
 

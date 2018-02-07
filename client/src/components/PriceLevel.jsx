@@ -37,7 +37,7 @@ class PriceLevel extends React.Component {
     _renderLevel (level) {
         if (!this.state.error) {
             return (
-                <nav className="level">
+                <nav className="notification level is-dark">
                     { level.map(this._renderLevelItem)}
                 </nav>
             );

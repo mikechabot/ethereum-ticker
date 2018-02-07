@@ -21,6 +21,14 @@ export const INITIAL_STATE = {
 export const PRICE_POLLING_INTERVAL_IN_SEC = 5;
 export const BLOCKCHAIN_POLLING_INTERVAL_IN_SEC = 30;
 
+export const HOURS_MENU = [
+    { label: '1H', key: 1 }, { label: '3H', key: 3 },
+    { label: '6H', key: 6 }, { label: '12H', key: 12 },
+    { label: '1D', key: 24 }, { label: '3D', key: 24 * 3 },
+    { label: '7D', key: 24 * 7 }, { label: '30D', key: 24 * 30 }
+];
+export const TIME_INTERVAL = [{ label: 'Hr', key: 'hour' }, { label: 'Min', key: 'minute' }];
+
 export const PRICE_LEVEL_CONFIG = [
     {
         pendingKey     : 'isFetchingBlockchain',

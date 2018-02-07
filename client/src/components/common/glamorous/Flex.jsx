@@ -37,7 +37,7 @@ function _getExplicitStyles (props, propKeys) {
         .filter(rule => rule);
 }
 
-export const Flex = glamorous.div(
+const Flex = glamorous.div(
     {
         display: 'flex'
     },
@@ -49,3 +49,5 @@ export const Flex = glamorous.div(
         return [...implicit, ..._getExplicitStyles(props, ALLOWED_FLEX_PROPS)];
     }
 );
+
+export default Flex;
