@@ -51,7 +51,7 @@ class PriceLevel extends React.Component {
                 <div key={index} className="level-item has-text-centered" title={item.label}>
                     <div>
                         <p className="heading">{item.label}</p>
-                        <div className="title">
+                        <div className="title is-size-5-mobile">
                             { this._maybeRenderIcon(item) }
                             <span>
                                 {this._getDisplayValue(item)}

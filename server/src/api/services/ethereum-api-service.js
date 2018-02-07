@@ -27,6 +27,8 @@ let priceInterval;
 let statsInterval;
 
 let currentEthUsdDelta = -1;
+let lastStatsGenerationDate = null;
+let nextStatsGenerationDate = null;
 
 const STAT_GENERATION_INTERVAL_IN_MINUTES = ConfigService.getStatRegenerationInMinutes();
 const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MINUTES;
@@ -57,6 +59,8 @@ const EthereumAPIService = svc = {
     apiIntervals,
     statsInterval,
     lastAlertSent,
+    lastStatsGenerationDate,
+    nextStatsGenerationDate,
     getBlockchainInfoFromAPI () {
         let url = ConfigService.getBlockchainAPIUrl();
         const token = ConfigService.getBlockchainAPIToken();
@@ -67,6 +71,12 @@ const EthereumAPIService = svc = {
     },
     getPriceInfoFromAPI () {
         return DataAccessService.get(ConfigService.getPriceAPIUrl());
+    },
+    getNextStatisticsDate () {
+        if (!svc.nextStatsGenerationDate) {
+            return null;
+        }
+        return svc.nextStatsGenerationDate.toDate();
     },
     getAndSaveBlockchainInfo () {
         return new Promise((resolve, reject) => {
@@ -374,6 +384,10 @@ const EthereumAPIService = svc = {
         });
     },
     generateHistoricalStatistics () {
+        if (svc.statsInterval) {
+            clearInterval(svc.statsInterval);
+            svc.statsInterval = null;
+        }
         let promises = [];
         ALLOWED_HOURS_BACK.forEach((hoursBack, hoursIndex) => {
             ALLOWED_TIME_BASIS.forEach((timeBasis, intervalIndex) => {
@@ -386,11 +400,11 @@ const EthereumAPIService = svc = {
         Promise
             .all(promises)
             .then(() => {
-                if (!svc.statsInterval) {
-                    logger.info('Scheduling future statistics generations');
-                    logger.info(`Regeneration every ${STAT_GENERATION_INTERVAL_IN_MINUTES} min(s) ${STAT_GENERATION_INTERVAL_IN_SECONDS} secs`);
-                    svc.statsInterval = setInterval(svc.generateHistoricalStatistics, STAT_GENERATION_INTERVAL_IN_MILLISECONDS);
-                }
+                svc.lastStatsGenerationDate = new Date();
+                svc.nextStatsGenerationDate = moment(svc.lastStatsGenerationDate).add(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes');
+                logger.info(`Scheduling future statistics generations for ${svc.nextStatsGenerationDate.format('L LTS')}`);
+                logger.info(`Regenerating every ${STAT_GENERATION_INTERVAL_IN_MINUTES} min(s) (${STAT_GENERATION_INTERVAL_IN_SECONDS} secs)`);
+                svc.statsInterval = setInterval(svc.generateHistoricalStatistics, STAT_GENERATION_INTERVAL_IN_MILLISECONDS);
             })
             .catch(error => {
                 logger.error(error);

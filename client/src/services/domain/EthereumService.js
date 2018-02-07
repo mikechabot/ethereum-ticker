@@ -1,6 +1,9 @@
 import DataAccessService from '../data/data-access-service';
 
 const EthereumService = {
+    getNextStats () {
+        return DataAccessService.get('/eth/nextStats');
+    },
     getBlockchainInfo () {
         return DataAccessService.get('/eth/blockchain');
     },

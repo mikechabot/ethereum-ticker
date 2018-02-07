@@ -6,20 +6,22 @@ import EthereumService from '../services/domain/EthereumService';
 
 import CandlestickChart from './common/CandlestickChart';
 import PriceLevel from './PriceLevel';
-import Hero from './common/bulma/Hero';
 import Footer from './common/bulma/Footer';
 import Icon from './common/Icon';
 import Alert from './common/bulma/Alert';
 
 import {HOURS_MENU, TIME_INTERVAL} from '../common/app-const';
 import ButtonGroup from './common/bulma/ButtonGroup';
+import NextStatsTicker from './NextStatsTicker';
+
+const DEFAULT_INTERVAL_KEY = TIME_INTERVAL[0].key;
 
 class App extends React.Component {
     constructor (props) {
         super(props);
         this.state = {
             hoursBack               : 24,
-            timeBasis               : 'hour',
+            timeBasis               : DEFAULT_INTERVAL_KEY,
             isFetching              : true,
             historicalBlockchainInfo: null,
             historicalPriceInfo     : null
@@ -57,16 +59,19 @@ class App extends React.Component {
 
     _renderHeader () {
         return (
-            <div>
-                <Hero
-                    link="http://marketmovers.io"
-                    theme="light"
-                    title="marketmovers.io"
-                    subtitle="Data-driven insights on the Ethereum blockchain"
-                    icon="ethereum"
-                    iconPrefix="fab"
-                />
-            </div>
+            <nav className="navbar is-light" role="navigation" aria-label="main navigation">
+                <div className="navbar-brand">
+                    <a className="navbar-item is-size-4-desktop is-size-5-tablet is-size-6-mobile" href="http://marketmovers.io">
+                        <Icon icon="ethereum fa-2x" prefix="fab" />&nbsp;
+                        <span>marketmovers.io</span>
+                    </a>
+                </div>
+                <div className="navbar-end is-hidden-tablet-only is-hidden-mobile">
+                    <div className="navbar-item">
+                        <NextStatsTicker />
+                    </div>
+                </div>
+            </nav>
         );
     }
 
