@@ -51,7 +51,7 @@ class App extends React.Component {
     constructor (props) {
         super(props);
         this.state = {
-            hoursBack               : 1,
+            hoursBack               : 24,
             timeBasis               : 'hour',
             isFetching              : true,
             historicalBlockchainInfo: null,
