@@ -1,6 +1,7 @@
 import React from 'react';
 import Maybe from 'maybe-baby';
 import { withRouter } from 'react-router-dom';
+import { Tabs, Tab } from 'react-tabify';
 
 import EthereumService from '../services/domain/EthereumService';
 
@@ -13,6 +14,8 @@ import Alert from './common/bulma/Alert';
 import {HOURS_MENU, TIME_INTERVAL} from '../common/app-const';
 import ButtonGroup from './common/bulma/ButtonGroup';
 import NextStatsTicker from './NextStatsTicker';
+import Flex from './common/glamorous/Flex';
+import Exchanges from './Exchanges';
 
 const DEFAULT_INTERVAL_KEY = TIME_INTERVAL[0].key;
 
@@ -48,8 +51,23 @@ class App extends React.Component {
             <div style={{width: '100%'}}>
                 { this._renderHeader() }
                 <PriceLevel />
-                { this._renderChartControls() }
-                { this._renderChart() }
+                <Tabs theme={{
+                    main: {
+                        color: '#363636'
+                    }
+                }} id="tabs" defaultActiveKey={0}>
+                    <Tab eventKey={0} label="Chart">
+                        <Flex column flex={1} padding={20}>
+                            { this._renderChartControls() }
+                            { this._renderChart() }
+                        </Flex>
+                    </Tab>
+                    <Tab eventKey={1} label="Exchanges">
+                        <Flex column flex={1} padding={20}>
+                            <Exchanges />
+                        </Flex>
+                    </Tab>
+                </Tabs>
                 <div>
                     <Footer />
                 </div>

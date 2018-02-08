@@ -2,6 +2,12 @@ import EthereumAPIService from '../services/ethereum-api-service';
 import {ALLOWED_HOURS_BACK, ALLOWED_TIME_BASIS} from '../../common/app-const';
 
 const EthereumAPIController = {
+    handleGetExchangeInfo (request, response, next) {
+        EthereumAPIService
+            .getCurrentExchangeInfo()
+            .then(data => response.json(data))
+            .catch(error => next(error));
+    },
     handleGetNextStatisticsDate (request, response, next) {
         return response.json(
             EthereumAPIService

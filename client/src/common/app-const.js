@@ -2,6 +2,8 @@
 import React from 'react';
 import Icon from '../components/common/Icon';
 
+const ONE_BILLION = 1000000000;
+
 export const ENTITY_KEY = {
     FOO: 'foo',
     BAR: 'bar',
@@ -18,6 +20,7 @@ export const INITIAL_STATE = {
     counter: 0
 };
 
+export const EXCHANGE_POLLING_IN_SEC = 120;
 export const PRICE_POLLING_INTERVAL_IN_SEC = 5;
 export const BLOCKCHAIN_POLLING_INTERVAL_IN_SEC = 30;
 
@@ -44,6 +47,22 @@ export const PRICE_LEVEL_CONFIG = [
                     : <small className="has-text-danger">({data.pendingTxDelta})</small>}
             </span>
         )
+    },
+    {
+        pendingKey: 'isFetchingPrice',
+        stateKey  : 'priceInfo',
+        propKey   : 'MKTCAP',
+        label     : 'Market Cap',
+        icon      : 'dollar-sign',
+        getValue  : mktcap => {
+            try {
+                const num = parseFloat(mktcap);
+                return `${(num / ONE_BILLION).toFixed(2)} B`;
+            } catch (error) {
+                console.warn(error);
+                return -1;
+            }
+        }
     },
     {
         pendingKey     : 'isFetchingPrice',

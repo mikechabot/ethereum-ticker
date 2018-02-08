@@ -19,6 +19,10 @@ html {
   font-family: $font-stack;
 }
 
+#tabs {
+  height: inherit;
+}
+
 #ethereum-ticker {
   @include flex;
   @include full-height;

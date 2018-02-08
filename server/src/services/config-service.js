@@ -53,6 +53,12 @@ export default {
     },
     getEmailRecipients () {
         return instance.getRequiredProperty('emailRecipients');
+    },
+    getExchangesAPIURLs () {
+        return instance.getRequiredProperty('api.cryptocompareExchanges.urls');
+    },
+    getExchangesMaxRequestsPerDay () {
+        return instance.getRequiredProperty('api.cryptocompareExchanges.maxRequestsPerDay');
     }
 };
 

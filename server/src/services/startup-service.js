@@ -159,7 +159,7 @@ function _startAPIService () {
     const EthereumAPIService = require('../api/services/ethereum-api-service').default;
     logger.info('');
     logger.info('************************************************');
-    logger.info('| Starting polling in 5 seconds                |');
+    logger.info('| Starting API polling in 5 seconds            |');
     logger.info('************************************************');
     logger.info('| Starting statistics generation in 10 seconds |');
     logger.info('************************************************');

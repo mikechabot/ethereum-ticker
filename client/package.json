@@ -38,6 +38,7 @@
     "react-dom": "^15.5.0-rc.2",
     "react-redux": "^5.0.6",
     "react-router-dom": "^4.1.2",
+    "react-tabify": "0.0.24",
     "redux": "^3.7.2",
     "redux-entity": "^5.0.5",
     "redux-logger": "^3.0.6",

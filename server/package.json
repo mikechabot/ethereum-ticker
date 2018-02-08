@@ -5,7 +5,7 @@
   "scripts": {
     "start": "npm run clear && npm run build && npm run server",
     "build": "babel src -d lib",
-    "server": "node --max-old-space-size=8192 server.js",
+    "server": "node server.js",
     "clear": "rm -rf ./lib"
   },
   "repository": {

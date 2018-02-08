@@ -22,6 +22,7 @@ const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
 const priceModel = MongooseService.MODELS.ETH_PRICE;
 
+let exchangeInterval;
 let blockchainInterval;
 let priceInterval;
 let statsInterval;
@@ -35,6 +36,7 @@ const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MIN
 const STAT_GENERATION_INTERVAL_IN_MILLISECONDS = 1000 * STAT_GENERATION_INTERVAL_IN_SECONDS;
 
 const apiIntervals = {
+    exchangeInterval,
     blockchainInterval,
     priceInterval
 };
@@ -72,11 +74,34 @@ const EthereumAPIService = svc = {
     getPriceInfoFromAPI () {
         return DataAccessService.get(ConfigService.getPriceAPIUrl());
     },
+    getExchangesInfoFromAPIs () {
+        const promises = [];
+        ConfigService.getExchangesAPIURLs().forEach(url => {
+            promises.push(DataAccessService.get(url));
+        });
+        return Promise.all(promises);
+    },
     getNextStatisticsDate () {
         if (!svc.nextStatsGenerationDate) {
             return null;
         }
         return svc.nextStatsGenerationDate.toDate();
+    },
+    getAndCacheExchangesInfo () {
+        return new Promise((resolve, reject) => {
+            svc.getExchangesInfoFromAPIs()
+                .then(exchangeInfos => {
+                    if (svc.cache.has('exchangesInfos')) {
+                        svc.cache.delete('exchangesInfos');
+                    }
+                    svc.cache.add('exchangesInfos', exchangeInfos);
+                    resolve();
+                })
+                .catch(error => {
+                    logger.error(error);
+                    reject(error);
+                });
+        });
     },
     getAndSaveBlockchainInfo () {
         return new Promise((resolve, reject) => {
@@ -94,14 +119,14 @@ const EthereumAPIService = svc = {
                             )
                             .then(() => {
                                 svc.lastAlertSent = new Date();
-                                resolve(info);
+                                resolve();
                             })
                             .catch(error => {
                                 logger.error(error);
                                 reject(error);
                             });
                     } else {
-                        resolve(info);
+                        resolve();
                     }
                 })
                 .catch(error => {
@@ -120,7 +145,8 @@ const EthereumAPIService = svc = {
                             RAW: {
                                 ETH: {
                                     USD: {
-                                        PRICE: Maybe.of(price.RAW.ETH.USD.PRICE).join()
+                                        PRICE : Maybe.of(price.RAW.ETH.USD.PRICE).join(),
+                                        MKTCAP: Maybe.of(price.RAW.ETH.USD.MKTCAP).join()
                                     },
                                     BTC: {
                                         PRICE: Maybe.of(price.RAW.ETH.BTC.PRICE).join()
@@ -136,6 +162,10 @@ const EthereumAPIService = svc = {
                     reject(error);
                 });
         });
+    },
+    getCurrentExchangeInfo () {
+        const cacheKey = 'exchangesInfos';
+        return Promise.resolve(svc.cache.find('exchangesInfos'));
     },
     getCurrentBlockchainInfo () {
         return new Promise((resolve, reject) => {
@@ -181,7 +211,8 @@ const EthereumAPIService = svc = {
                     resolve({
                         BTC      : Maybe.of(BTC.PRICE).orElse(-1).join(),
                         USD      : USD.PRICE,
-                        USD_delta: currentEthUsdDelta
+                        USD_delta: currentEthUsdDelta,
+                        MKTCAP   : USD.MKTCAP
                     });
                 })
                 .catch(error => {
@@ -413,6 +444,13 @@ const EthereumAPIService = svc = {
     startPolling () {
         svc.startPollingWithConfigs([
             {
+                key           : 'exchange',
+                interval      : apiIntervals.exchangeInterval,
+                url           : ConfigService.getExchangesAPIURLs(),
+                requestsPerDay: ConfigService.getExchangesMaxRequestsPerDay(),
+                promise       : svc.getAndCacheExchangesInfo
+            },
+            {
                 key           : 'blockchain',
                 interval      : apiIntervals.blockchainInterval,
                 url           : ConfigService.getBlockchainAPIUrl(),
@@ -427,7 +465,6 @@ const EthereumAPIService = svc = {
                 requestsPerDay: ConfigService.getPriceAPIMaxRequestsPerDay(),
                 promise       : svc.getAndSavePriceInfo
             }
-
         ]);
     },
     startPollingWithConfigs (configs) {
@@ -445,7 +482,7 @@ const EthereumAPIService = svc = {
             const requestsPerSec = (60 * 60 * 24) / config.requestsPerDay;
             logger.info('************************************************');
             logger.info(`Starting ETH ${config.key} polling (Interval #${index + 1})`);
-            logger.info(`Using API @ ${config.url}`);
+            logger.info(`Using API @ ${config.url.toString()}`);
             logger.info(`Maximum requests per day: ${config.requestsPerDay}`);
             logger.info(`Polling interval: ${requestsPerSec} seconds`);
             logger.info(`API Token: ${config.token || 'None'}`);

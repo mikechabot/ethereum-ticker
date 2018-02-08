@@ -15,6 +15,9 @@ const EthereumService = {
     },
     getHistoricalPriceInfo (hoursBack, timeBasis) {
         return DataAccessService.get('/eth/price/history', { hoursBack, timeBasis });
+    },
+    getExchangesInfos () {
+        return DataAccessService.get('/eth/exchanges');
     }
 };
 
