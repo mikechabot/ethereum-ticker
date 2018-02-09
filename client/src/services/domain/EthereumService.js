@@ -18,6 +18,9 @@ const EthereumService = {
     },
     getExchangesInfos () {
         return DataAccessService.get('/eth/exchanges');
+    },
+    getTopVolumeToInfo () {
+        return DataAccessService.get('/eth/topVolumeTo');
     }
 };
 

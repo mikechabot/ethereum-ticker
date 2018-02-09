@@ -16,6 +16,7 @@ import ButtonGroup from './common/bulma/ButtonGroup';
 import NextStatsTicker from './NextStatsTicker';
 import Flex from './common/glamorous/Flex';
 import Exchanges from './Exchanges';
+import TopVolumeTo from './TopVolumeTo';
 
 const DEFAULT_INTERVAL_KEY = TIME_INTERVAL[0].key;
 
@@ -57,14 +58,24 @@ class App extends React.Component {
                     }
                 }} id="tabs" defaultActiveKey={0}>
                     <Tab eventKey={0} label="Chart">
-                        <Flex column flex={1} padding={20}>
+                        <div style={{width: '100%'}} className="m-top--small">
+                            <p className="title m--large has-text-centered">
+                                Pending Txs vs ETH/USD
+                            </p>
+                            <div className="container">
+                                { this._renderChart() }
+                            </div>
                             { this._renderChartControls() }
-                            { this._renderChart() }
-                        </Flex>
+                        </div>
                     </Tab>
                     <Tab eventKey={1} label="Top Exchanges">
                         <Flex column flex={1}>
                             <Exchanges />
+                        </Flex>
+                    </Tab>
+                    <Tab eventKey={2} label="Top Volume To">
+                        <Flex column flex={1}>
+                            <TopVolumeTo />
                         </Flex>
                     </Tab>
                 </Tabs>
@@ -95,7 +106,7 @@ class App extends React.Component {
 
     _renderChartControls () {
         return (
-            <nav className="level notification light">
+            <nav className="level notification is-dark">
                 <div className="level-item has-text-centered">
                     <div>{ this._renderHoursButtons() }</div>
                     &nbsp;
@@ -159,7 +170,6 @@ class App extends React.Component {
                 <CandlestickChart
                     id="eth-usd-chart"
                     height={600}
-                    legend="Pending Txs vs ETH/USD"
                     yAxis={{
                         includeZero    : false,
                         prefix         : '$',

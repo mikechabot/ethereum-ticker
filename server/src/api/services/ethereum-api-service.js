@@ -170,13 +170,48 @@ const EthereumAPIService = svc = {
     getAndCacheTopVolumeTo () {
         return new Promise((resolve, reject) => {
             svc.getTopVolumeToInfoFromAPI()
-                .then(exchangeInfos => {
-                    if (svc.cache.has('topVolumeTo')) {
-                        svc.cache.delete('topVolumeTo');
-                    }
-                    logger.info('CACHE: Caching top volume-to info (cacheKey=topVolumeTo)');
-                    svc.cache.add('topVolumeTo', exchangeInfos);
-                    resolve();
+                .then(topVolumeTo => {
+                    let coinPromises = [];
+                    topVolumeTo.Data.forEach(coin => {
+                        const { ID } = coin;
+                        if (ID !== -1) {
+                            coinPromises.push(
+                                DataAccessService.get(`https://www.cryptocompare.com/api/data/coinsnapshotfullbyid/?id=${ID}`)
+                            );
+                        }
+                    });
+
+                    Promise
+                        .all(coinPromises)
+                        .then(coinInfos => {
+                            topVolumeTo.Data.forEach(coin => {
+                                if (coin.ID !== -1) {
+                                    const coinInfo = coinInfos.find(coinInfo => coinInfo.Data.General.Id === coin.ID);
+                                    if (coinInfo) {
+                                        coin.info = {
+                                            url         : coinInfo.Data.General.Url,
+                                            imageUrl    : coinInfo.Data.General.ImageUrl,
+                                            affiliateUrl: coinInfo.Data.General.AffiliateUrl,
+                                            twitter     : coinInfo.Data.General.Twitter,
+                                            description : coinInfo.Data.General.Description
+                                        };
+                                    } else {
+                                        console.log('nope');
+                                    }
+                                }
+                            });
+
+                            if (svc.cache.has('topVolumeTo')) {
+                                svc.cache.delete('topVolumeTo');
+                            }
+                            logger.info('CACHE: Caching top volume-to info (cacheKey=topVolumeTo)');
+                            svc.cache.add('topVolumeTo', topVolumeTo);
+                            resolve();
+                        })
+                        .catch(error => {
+                            logger.error(error);
+                            reject(error);
+                        });
                 })
                 .catch(error => {
                     logger.error(error);

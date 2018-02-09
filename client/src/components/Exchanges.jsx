@@ -53,7 +53,7 @@ class Exchanges extends React.Component {
         }
 
         return (
-            <div>
+            <div className="container">
                 { this._renderExchangesInfo() }
             </div>
         );
@@ -69,7 +69,7 @@ class Exchanges extends React.Component {
                     { config.subtitle }
                 </h2>
                 <div className="m-left--x-mall m-right--x-small">
-                    <table className="table is-size-7-mobile is-fullwidth">
+                    <table className="table is-hoverable is-size-7-mobile is-fullwidth">
                         <thead>
                             <tr>
                                 <th>Exchange</th>

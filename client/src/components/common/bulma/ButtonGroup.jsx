@@ -4,7 +4,6 @@ import PropTypes from 'prop-types';
 function ButtonGroup ({
     activeKey,
     items,
-
     onClick
 }) {
     return (
@@ -17,7 +16,7 @@ function ButtonGroup ({
 function _renderItem (activeKey, onClick, item) {
     let className = 'button is-small';
     if (activeKey === item.key) {
-        className = `${className} is-dark is-selected`;
+        className = `${className} is-success is-selected`;
     }
     return (
         <span
