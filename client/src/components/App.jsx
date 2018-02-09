@@ -63,7 +63,7 @@ class App extends React.Component {
                         </Flex>
                     </Tab>
                     <Tab eventKey={1} label="Top Exchanges">
-                        <Flex column flex={1} padding={5}>
+                        <Flex column flex={1}>
                             <Exchanges />
                         </Flex>
                     </Tab>

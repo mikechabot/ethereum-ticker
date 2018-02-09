@@ -61,15 +61,15 @@ class Exchanges extends React.Component {
 
     _renderTable (config) {
         return (
-            <Flex column hAlignCenter flex={1} flexShrink={0}>
+            <div className="column">
                 <h1 className="title is-size-5-mobile">
                     { config.title }
                 </h1>
-                <h2 className="subtitle">
+                <h2 className="subtitle is-size-6-mobile">
                     { config.subtitle }
                 </h2>
                 <div className="m-left--x-mall m-right--x-small">
-                    <table className="table">
+                    <table className="table is-size-7-mobile is-fullwidth">
                         <thead>
                             <tr>
                                 <th>Exchange</th>
@@ -84,7 +84,7 @@ class Exchanges extends React.Component {
                         </tbody>
                     </table>
                 </div>
-            </Flex>
+            </div>
         );
     }
 
