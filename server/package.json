@@ -31,7 +31,7 @@
     "lodash": "^4.17.4",
     "log4js": "^2.3.3",
     "mailgun-js": "^0.14.2",
-    "maybe-baby": "^0.1.0",
+    "maybe-baby": "^1.0.20",
     "moment": "^2.18.1",
     "mongodb": "^2.2.8",
     "mongoose": "^4.11.7",

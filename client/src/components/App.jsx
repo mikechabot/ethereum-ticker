@@ -62,8 +62,8 @@ class App extends React.Component {
                             { this._renderChart() }
                         </Flex>
                     </Tab>
-                    <Tab eventKey={1} label="Exchanges">
-                        <Flex column flex={1} padding={20}>
+                    <Tab eventKey={1} label="Top Exchanges">
+                        <Flex column flex={1} padding={5}>
                             <Exchanges />
                         </Flex>
                     </Tab>
@@ -121,7 +121,7 @@ class App extends React.Component {
                 onClick={this._tryAgain}
                 content={(
                     <span>
-                            Unable to fetch historical data.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
+                        Unable to fetch historical data.&nbsp;<a href="javascript:void(0);" onClick={this._tryAgain}>Try again?</a>
                     </span>
                 )}
                 icon="exclamation-triangle"

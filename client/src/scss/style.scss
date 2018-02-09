@@ -32,6 +32,26 @@ html {
   @include full-height;
 }
 
+.m-left--x-small {
+  margin-left: 0.25rem;
+}
+
+.m-right--x-small {
+  margin-right: 0.25rem;
+}
+
+.m-top--x-small {
+  margin-top: 0.25rem;
+}
+
+.m-bottom--x-small {
+  margin-bottom: 0.25rem;
+}
+
+.m--x-small {
+  margin: 0.25rem;
+}
+
 .m-left--small {
   margin-left: 0.5rem;
 }

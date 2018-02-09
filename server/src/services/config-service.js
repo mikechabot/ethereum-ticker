@@ -22,43 +22,49 @@ export default {
         return instance.getRequiredProperty('whitelist');
     },
     getBlockchainAPIUrl () {
-        return instance.getRequiredProperty('api.blockcypher.url');
+        return instance.getRequiredProperty('api.blockchain.url');
     },
     getBlockchainAPIToken () {
-        return instance.getProperty('api.blockcypher.token');
+        return instance.getProperty('api.blockchain.token');
     },
     getBlockchainAPIMaxRequestsPerDay () {
-        return instance.getRequiredProperty('api.blockcypher.maxRequestsPerDay');
+        return instance.getRequiredProperty('api.blockchain.maxRequestsPerDay');
     },
     getPriceAPIUrl () {
-        return instance.getRequiredProperty('api.cryptocompare.url');
+        return instance.getRequiredProperty('api.price.url');
     },
     getPriceAPIMaxRequestsPerDay () {
-        return instance.getRequiredProperty('api.cryptocompare.maxRequestsPerDay');
+        return instance.getRequiredProperty('api.price.maxRequestsPerDay');
     },
     getStatRegenerationInMinutes () {
-        return instance.getRequiredProperty('statRegenerationInMinutes');
+        return instance.getRequiredProperty('statistics.regenerationIntervalInMin');
     },
     getMailerKey () {
-        return instance.getRequiredProperty('api.mailgun.key');
+        return instance.getRequiredProperty('api.mailer.key');
     },
     getMailerDomain () {
-        return instance.getRequiredProperty('api.mailgun.domain');
+        return instance.getRequiredProperty('api.mailer.domain');
     },
     getSendAlertInterval () {
-        return instance.getRequiredProperty('sendAlertIntervalInMinutes');
+        return instance.getRequiredProperty('alerts.sendAlertIntervalInMin');
     },
     getPendingTxThreshold () {
-        return instance.getRequiredProperty('pendingTxThreshold');
+        return instance.getRequiredProperty('alerts.pendingTxThreshold');
     },
     getEmailRecipients () {
-        return instance.getRequiredProperty('emailRecipients');
+        return instance.getRequiredProperty('alerts.emailRecipients');
     },
     getExchangesAPIURLs () {
-        return instance.getRequiredProperty('api.cryptocompareExchanges.urls');
+        return instance.getRequiredProperty('api.exchanges.urls');
     },
     getExchangesMaxRequestsPerDay () {
-        return instance.getRequiredProperty('api.cryptocompareExchanges.maxRequestsPerDay');
+        return instance.getRequiredProperty('api.exchanges.maxRequestsPerDay');
+    },
+    getVolumeAPIUrl () {
+        return instance.getRequiredProperty('api.topVolumeTo.url');
+    },
+    getVolumeMaxRequestsPerDay () {
+        return instance.getRequiredProperty('api.topVolumeTo.maxRequestsPerDay');
     }
 };
 

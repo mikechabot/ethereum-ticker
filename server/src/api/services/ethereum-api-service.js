@@ -21,7 +21,9 @@ const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
 const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
 const priceModel = MongooseService.MODELS.ETH_PRICE;
+const coinInfoModel = MongooseService.MODELS.COIN_INFO;
 
+let topVolumeToInterval;
 let exchangeInterval;
 let blockchainInterval;
 let priceInterval;
@@ -36,6 +38,7 @@ const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MIN
 const STAT_GENERATION_INTERVAL_IN_MILLISECONDS = 1000 * STAT_GENERATION_INTERVAL_IN_SECONDS;
 
 const apiIntervals = {
+    topVolumeToInterval,
     exchangeInterval,
     blockchainInterval,
     priceInterval
@@ -74,6 +77,9 @@ const EthereumAPIService = svc = {
     getPriceInfoFromAPI () {
         return DataAccessService.get(ConfigService.getPriceAPIUrl());
     },
+    getTopVolumeToInfoFromAPI () {
+        return DataAccessService.get(ConfigService.getVolumeAPIUrl());
+    },
     getExchangesInfoFromAPIs () {
         const promises = [];
         ConfigService.getExchangesAPIURLs().forEach(url => {
@@ -91,11 +97,37 @@ const EthereumAPIService = svc = {
         return new Promise((resolve, reject) => {
             svc.getExchangesInfoFromAPIs()
                 .then(exchangeInfos => {
-                    if (svc.cache.has('exchangesInfos')) {
-                        svc.cache.delete('exchangesInfos');
+                    if (exchangeInfos) {
+                        let coinInfoPromise = null;
+                        let exchangesPerPair = [];
+                        exchangeInfos.forEach(exchangeInfo => {
+                            const coinInfo = Maybe.of(exchangeInfo).path('Data.CoinInfo');
+                            if (coinInfo.isJust() && !coinInfoPromise) {
+                                coinInfoPromise = MongooseService.saveNewObject(coinInfoModel, coinInfo.join());
+                            }
+                            const exchanges = Maybe.of(exchangeInfo).path('Data.Exchanges');
+                            if (exchanges.isJust()) {
+                                exchangesPerPair.push(exchanges.join());
+                            }
+                        });
+
+                        if (svc.cache.has('exchangesInfos')) {
+                            svc.cache.delete('exchangesInfos');
+                        }
+                        logger.info('CACHE: Caching top exchanges info (cacheKey=exchangesInfos)');
+                        svc.cache.add('exchangesInfos', exchangesPerPair);
+
+                        if (coinInfoPromise) {
+                            logger.info('COININFO: Storing coininfo');
+                            coinInfoPromise
+                                .then(() => {
+                                    resolve();
+                                })
+                                .catch(error => {
+                                    logger.error(error);
+                                });
+                        }
                     }
-                    svc.cache.add('exchangesInfos', exchangeInfos);
-                    resolve();
                 })
                 .catch(error => {
                     logger.error(error);
@@ -135,6 +167,23 @@ const EthereumAPIService = svc = {
                 });
         });
     },
+    getAndCacheTopVolumeTo () {
+        return new Promise((resolve, reject) => {
+            svc.getTopVolumeToInfoFromAPI()
+                .then(exchangeInfos => {
+                    if (svc.cache.has('topVolumeTo')) {
+                        svc.cache.delete('topVolumeTo');
+                    }
+                    logger.info('CACHE: Caching top volume-to info (cacheKey=topVolumeTo)');
+                    svc.cache.add('topVolumeTo', exchangeInfos);
+                    resolve();
+                })
+                .catch(error => {
+                    logger.error(error);
+                    reject(error);
+                });
+        });
+    },
     getAndSavePriceInfo () {
         return new Promise((resolve, reject) => {
             svc.getPriceInfoFromAPI()
@@ -164,8 +213,10 @@ const EthereumAPIService = svc = {
         });
     },
     getCurrentExchangeInfo () {
-        const cacheKey = 'exchangesInfos';
         return Promise.resolve(svc.cache.find('exchangesInfos'));
+    },
+    getCurrentTopVolumeTo () {
+        return Promise.resolve(svc.cache.find('topVolumeTo'));
     },
     getCurrentBlockchainInfo () {
         return new Promise((resolve, reject) => {
@@ -443,6 +494,13 @@ const EthereumAPIService = svc = {
     },
     startPolling () {
         svc.startPollingWithConfigs([
+            {
+                key           : 'topVolumeTo',
+                interval      : apiIntervals.exchangeInterval,
+                url           : ConfigService.getVolumeAPIUrl(),
+                requestsPerDay: ConfigService.getVolumeMaxRequestsPerDay(),
+                promise       : svc.getAndCacheTopVolumeTo
+            },
             {
                 key           : 'exchange',
                 interval      : apiIntervals.exchangeInterval,

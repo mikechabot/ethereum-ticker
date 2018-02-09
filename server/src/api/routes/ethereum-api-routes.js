@@ -1,4 +1,5 @@
 const PATH = {
+    ETH_TOP_VOLUME_TO        : '/api/eth/topVolumeTo',
     ETH_EXCHANGES            : '/api/eth/exchanges',
     ETH_NEXT_STATS           : '/api/eth/nextStats',
     ETH_PRICE_CURRENT        : '/api/eth/price',
@@ -9,6 +10,7 @@ const PATH = {
 
 export default {
     configure (app, controller) {
+        app.get(PATH.ETH_TOP_VOLUME_TO, controller.handleGetTopVolumeTo);
         app.get(PATH.ETH_EXCHANGES, controller.handleGetExchangeInfo);
         app.get(PATH.ETH_NEXT_STATS, controller.handleGetNextStatisticsDate);
         app.get(PATH.ETH_PRICE_CURRENT, controller.handleGetCurrentPriceInfo);
