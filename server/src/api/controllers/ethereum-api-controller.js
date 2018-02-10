@@ -1,34 +1,35 @@
 import EthereumAPIService from '../services/ethereum-api-service';
 import {ALLOWED_HOURS_BACK, ALLOWED_TIME_BASIS} from '../../common/app-const';
+import PollingService from '../../services/polling-service';
 
 const EthereumAPIController = {
     handleGetTopVolumeTo (request, response, next) {
         EthereumAPIService
-            .getCurrentTopVolumeTo()
+            .getCurrentTopVolumeToFromCache()
             .then(data => response.json(data))
             .catch(error => next(error));
     },
     handleGetExchangeInfo (request, response, next) {
         EthereumAPIService
-            .getCurrentExchangeInfo()
+            .getCurrentExchangeInfoFromCache()
             .then(data => response.json(data))
             .catch(error => next(error));
     },
     handleGetNextStatisticsDate (request, response, next) {
         return response.json(
-            EthereumAPIService
+            PollingService
                 .getNextStatisticsDate()
         );
     },
     handleGetCurrentBlockchainInfo (request, response, next) {
         EthereumAPIService
-            .getCurrentBlockchainInfo()
+            .getLatestBlockchainInfoFromDisk()
             .then(data => response.json(data))
             .catch(error => next(error));
     },
     handleGetCurrentPriceInfo (request, response, next) {
         EthereumAPIService
-            .getCurrentPriceInfo()
+            .getLatestPriceInfoFromDisk()
             .then(data => response.json(data))
             .catch(error => next(error));
     },
@@ -47,7 +48,7 @@ const EthereumAPIController = {
         }
 
         EthereumAPIService
-            .getHistoricalBlockchainInfo(hoursBack, timeBasis)
+            .getHistoricalBlockchainInfoFromCache(hoursBack, timeBasis)
             .then(data => response.json(data))
             .catch(error => next(error));
     },

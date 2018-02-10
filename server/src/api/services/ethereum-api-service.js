@@ -23,28 +23,13 @@ const blockchainModel = MongooseService.MODELS.ETH_BLOCKCHAIN;
 const priceModel = MongooseService.MODELS.ETH_PRICE;
 const coinInfoModel = MongooseService.MODELS.COIN_INFO;
 
-let topVolumeToInterval;
-let exchangeInterval;
-let blockchainInterval;
-let priceInterval;
-let statsInterval;
-
 let currentEthUsdDelta = -1;
-let lastStatsGenerationDate = null;
-let nextStatsGenerationDate = null;
-
-const STAT_GENERATION_INTERVAL_IN_MINUTES = ConfigService.getStatRegenerationInMinutes();
-const STAT_GENERATION_INTERVAL_IN_SECONDS = 60 * STAT_GENERATION_INTERVAL_IN_MINUTES;
-const STAT_GENERATION_INTERVAL_IN_MILLISECONDS = 1000 * STAT_GENERATION_INTERVAL_IN_SECONDS;
-
-const apiIntervals = {
-    topVolumeToInterval,
-    exchangeInterval,
-    blockchainInterval,
-    priceInterval
-};
-
 let lastAlertSent;
+
+const CACHE_KEY = {
+    EXCHANGE_INFOS: 'exchangesInfos',
+    TOP_VOLUME_TO : 'topVolumeTo'
+};
 
 const cache = new SortableMap();
 
@@ -61,11 +46,7 @@ function __generateParameters (hoursBack) {
 let svc = {};
 const EthereumAPIService = svc = {
     cache,
-    apiIntervals,
-    statsInterval,
     lastAlertSent,
-    lastStatsGenerationDate,
-    nextStatsGenerationDate,
     getBlockchainInfoFromAPI () {
         let url = ConfigService.getBlockchainAPIUrl();
         const token = ConfigService.getBlockchainAPIToken();
@@ -80,87 +61,25 @@ const EthereumAPIService = svc = {
     getTopVolumeToInfoFromAPI () {
         return DataAccessService.get(ConfigService.getVolumeAPIUrl());
     },
-    getExchangesInfoFromAPIs () {
+    getExchangesAndCoinInfoFromAPIs () {
         const promises = [];
         ConfigService.getExchangesAPIURLs().forEach(url => {
             promises.push(DataAccessService.get(url));
         });
         return Promise.all(promises);
     },
-    getNextStatisticsDate () {
-        if (!svc.nextStatsGenerationDate) {
-            return null;
-        }
-        return svc.nextStatsGenerationDate.toDate();
+    getCurrentExchangeInfoFromCache () {
+        return Promise.resolve(svc.cache.find('exchangesInfos'));
     },
-    getAndCacheExchangesInfo () {
-        return new Promise((resolve, reject) => {
-            svc.getExchangesInfoFromAPIs()
-                .then(exchangeInfos => {
-                    if (exchangeInfos) {
-                        let coinInfoPromise = null;
-                        let exchangesPerPair = [];
-                        exchangeInfos.forEach(exchangeInfo => {
-                            const coinInfo = Maybe.of(exchangeInfo).path('Data.CoinInfo');
-                            if (coinInfo.isJust() && !coinInfoPromise) {
-                                coinInfoPromise = MongooseService.saveNewObject(coinInfoModel, coinInfo.join());
-                            }
-                            const exchanges = Maybe.of(exchangeInfo).path('Data.Exchanges');
-                            if (exchanges.isJust()) {
-                                exchangesPerPair.push(exchanges.join());
-                            }
-                        });
-
-                        if (svc.cache.has('exchangesInfos')) {
-                            svc.cache.delete('exchangesInfos');
-                        }
-                        logger.info('CACHE: Caching top exchanges info (cacheKey=exchangesInfos)');
-                        svc.cache.add('exchangesInfos', exchangesPerPair);
-
-                        if (coinInfoPromise) {
-                            logger.info('COININFO: Storing coininfo');
-                            coinInfoPromise
-                                .then(() => {
-                                    resolve();
-                                })
-                                .catch(error => {
-                                    logger.error(error);
-                                });
-                        }
-                    }
-                })
-                .catch(error => {
-                    logger.error(error);
-                    reject(error);
-                });
-        });
+    getCurrentTopVolumeToFromCache () {
+        return Promise.resolve(svc.cache.find('topVolumeTo'));
     },
-    getAndSaveBlockchainInfo () {
+    getAndCacheExchangesAndCoinInfo () {
         return new Promise((resolve, reject) => {
-            svc.getBlockchainInfoFromAPI()
-                .then(blockchain => MongooseService.saveNewObject(blockchainModel, blockchain))
-                .then(info => {
-                    const maybeCount = Maybe.of(info.unconfirmed_count);
-                    if ((!svc.lastAlertSent || moment().subtract(ConfigService.getSendAlertInterval(), 'minutes').isAfter(svc.lastAlertSent)) &&
-                        maybeCount.isJust() &&
-                        maybeCount.join() >= ConfigService.getPendingTxThreshold()) {
-                        MailerService
-                            .sendMessage(
-                                EMAIL_SUBJECT,
-                                EMAIL_MESSAGE(maybeCount.join())
-                            )
-                            .then(() => {
-                                svc.lastAlertSent = new Date();
-                                resolve();
-                            })
-                            .catch(error => {
-                                logger.error(error);
-                                reject(error);
-                            });
-                    } else {
-                        resolve();
-                    }
-                })
+            svc.getExchangesAndCoinInfoFromAPIs()
+                .then(exchangeInfos => svc.__cacheExchangesInfo(exchangeInfos))
+                .then(exchangeInfos => svc.__storeCoinInfo(exchangeInfos))
+                .then(resolve)
                 .catch(error => {
                     logger.error(error);
                     reject(error);
@@ -170,44 +89,13 @@ const EthereumAPIService = svc = {
     getAndCacheTopVolumeTo () {
         return new Promise((resolve, reject) => {
             svc.getTopVolumeToInfoFromAPI()
-                .then(topVolumeTo => {
-                    let coinPromises = [];
-                    topVolumeTo.Data.forEach(coin => {
-                        const { ID } = coin;
-                        if (ID !== -1) {
-                            coinPromises.push(
-                                DataAccessService.get(`https://www.cryptocompare.com/api/data/coinsnapshotfullbyid/?id=${ID}`)
-                            );
-                        }
-                    });
-
+                .then(svc.__generateCoinPromises)
+                .then(results => {
+                    const { promises, topVolumeTo } = results;
                     Promise
-                        .all(coinPromises)
-                        .then(coinInfos => {
-                            topVolumeTo.Data.forEach(coin => {
-                                if (coin.ID !== -1) {
-                                    const coinInfo = coinInfos.find(coinInfo => coinInfo.Data.General.Id === coin.ID);
-                                    if (coinInfo) {
-                                        coin.info = {
-                                            url         : coinInfo.Data.General.Url,
-                                            imageUrl    : coinInfo.Data.General.ImageUrl,
-                                            affiliateUrl: coinInfo.Data.General.AffiliateUrl,
-                                            twitter     : coinInfo.Data.General.Twitter,
-                                            description : coinInfo.Data.General.Description
-                                        };
-                                    } else {
-                                        console.log('nope');
-                                    }
-                                }
-                            });
-
-                            if (svc.cache.has('topVolumeTo')) {
-                                svc.cache.delete('topVolumeTo');
-                            }
-                            logger.info('CACHE: Caching top volume-to info (cacheKey=topVolumeTo)');
-                            svc.cache.add('topVolumeTo', topVolumeTo);
-                            resolve();
-                        })
+                        .all(promises)
+                        .then(coinInfo => svc.__attachCoinInfoToVolume(coinInfo, topVolumeTo))
+                        .then(resolve)
                         .catch(error => {
                             logger.error(error);
                             reject(error);
@@ -219,27 +107,11 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getAndSavePriceInfo () {
+    getAndStoreBlockchainInfo () {
         return new Promise((resolve, reject) => {
-            svc.getPriceInfoFromAPI()
-                .then(price => {
-                    if (Maybe.of(price.RAW.ETH.BTC).isJust() &&
-                        Maybe.of(price.RAW.ETH.USD).isJust()) {
-                        return MongooseService.saveNewObject(priceModel, {
-                            RAW: {
-                                ETH: {
-                                    USD: {
-                                        PRICE : Maybe.of(price.RAW.ETH.USD.PRICE).join(),
-                                        MKTCAP: Maybe.of(price.RAW.ETH.USD.MKTCAP).join()
-                                    },
-                                    BTC: {
-                                        PRICE: Maybe.of(price.RAW.ETH.BTC.PRICE).join()
-                                    }
-                                }
-                            }
-                        });
-                    }
-                })
+            svc.getBlockchainInfoFromAPI()
+                .then(blockchain => MongooseService.saveNewObject(blockchainModel, blockchain))
+                .then(blockchain => svc.__checkThresholdStatus(blockchain))
                 .then(resolve)
                 .catch(error => {
                     logger.error(error);
@@ -247,13 +119,18 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getCurrentExchangeInfo () {
-        return Promise.resolve(svc.cache.find('exchangesInfos'));
+    getAndStorePriceInfo () {
+        return new Promise((resolve, reject) => {
+            svc.getPriceInfoFromAPI()
+                .then(svc.__storePriceInfo)
+                .then(resolve)
+                .catch(error => {
+                    logger.error(error);
+                    reject(error);
+                });
+        });
     },
-    getCurrentTopVolumeTo () {
-        return Promise.resolve(svc.cache.find('topVolumeTo'));
-    },
-    getCurrentBlockchainInfo () {
+    getLatestBlockchainInfoFromDisk () {
         return new Promise((resolve, reject) => {
             MongooseService
                 .find(blockchainModel, {
@@ -273,7 +150,7 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getCurrentPriceInfo () {
+    getLatestPriceInfoFromDisk () {
         return new Promise((resolve, reject) => {
             MongooseService
                 .find(priceModel, {
@@ -282,36 +159,19 @@ const EthereumAPIService = svc = {
                         [MongooseService.DOMAIN_PROPERTY.ID]: -1
                     }
                 })
-                .then(prices => {
-                    const latestEthPrice = prices[0];
-                    const prevEthPrice = prices[1];
-
-                    const { ETH } = latestEthPrice.RAW;
-                    const { BTC, USD} = ETH;
-
-                    const ethUsdDelta = (USD.PRICE - (prevEthPrice ? prevEthPrice.RAW.ETH.USD.PRICE : 0)).toFixed(2);
-                    if (ethUsdDelta !== '0.00') {
-                        currentEthUsdDelta = ethUsdDelta;
-                    }
-
-                    resolve({
-                        BTC      : Maybe.of(BTC.PRICE).orElse(-1).join(),
-                        USD      : USD.PRICE,
-                        USD_delta: currentEthUsdDelta,
-                        MKTCAP   : USD.MKTCAP
-                    });
-                })
+                .then(svc.__generatePriceObjectResponse)
+                .then(resolve)
                 .catch(error => {
                     logger.error(error);
                     reject(error);
                 });
         });
     },
-    getHistoricalBlockchainInfo (hoursBack = 1, timeBasis = 'hour') {
+    getHistoricalBlockchainInfoFromCache (hoursBack = 1, timeBasis = 'hour') {
         const cacheKey = `blockchain-${hoursBack}-${timeBasis}`;
         if (svc.cache.has(cacheKey)) {
             const cached = svc.cache.find(cacheKey);
-            if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
+            if (moment().subtract(ConfigService.getStatRegenerationInMinutes(), 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
                 logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
                 return Promise.resolve(cached.data);
             } else {
@@ -472,7 +332,7 @@ const EthereumAPIService = svc = {
         const cacheKey = `price-${hoursBack}-${timeBasis}`;
         if (svc.cache.has(cacheKey)) {
             const cached = svc.cache.find(cacheKey);
-            if (moment().subtract(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
+            if (moment().subtract(ConfigService.getStatRegenerationInMinutes(), 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
                 logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
                 return Promise.resolve(cached.data);
             } else {
@@ -483,117 +343,131 @@ const EthereumAPIService = svc = {
         }
         return Promise.reject(new Error('CACHE: Cache not ready'));
     },
-    generateChartData (hoursBack, timeInterval, timeoutOptions) {
-        const BASE_DELAY_IN_SECONDS = 5;
-        const { outer, inner } = timeoutOptions;
-        return new Promise(resolve => {
-            let delay = BASE_DELAY_IN_SECONDS + (outer * 10);
-            if (inner) {
-                delay += (inner * 5);
+    __generatePriceObjectResponse (prices) {
+        if (prices) {
+            const latestEthPrice = prices[0];
+            const prevEthPrice = prices[1];
+
+            const { ETH } = latestEthPrice.RAW;
+            const { BTC, USD} = ETH;
+
+            const ethUsdDelta = (USD.PRICE - (prevEthPrice ? prevEthPrice.RAW.ETH.USD.PRICE : 0)).toFixed(2);
+            if (ethUsdDelta !== '0.00') {
+                currentEthUsdDelta = ethUsdDelta;
             }
-            logger.info(`Scheduling statistics generation in ${delay} seconds. (hoursBack=${hoursBack}, timeBasis=${timeInterval})`);
-            setTimeout(() => resolve(
-                Promise.all([
-                    svc.generateHistoricalPriceStats(hoursBack, timeInterval, timeoutOptions),
-                    svc.generateHistoricalBlockchainStats(hoursBack, timeInterval, timeoutOptions)
-                ])
-            ), delay * 1000);
-        });
-    },
-    generateHistoricalStatistics () {
-        if (svc.statsInterval) {
-            clearInterval(svc.statsInterval);
-            svc.statsInterval = null;
+
+            return {
+                BTC      : Maybe.of(BTC.PRICE).orElse(-1).join(),
+                USD      : USD.PRICE,
+                USD_delta: currentEthUsdDelta,
+                MKTCAP   : USD.MKTCAP
+            };
         }
-        let promises = [];
-        ALLOWED_HOURS_BACK.forEach((hoursBack, hoursIndex) => {
-            ALLOWED_TIME_BASIS.forEach((timeBasis, intervalIndex) => {
-                promises = [
-                    ...promises,
-                    ...svc.generateChartData(hoursBack, timeBasis, { outer: hoursIndex, inner: intervalIndex})
-                ];
-            });
-        });
-        Promise
-            .all(promises)
-            .then(() => {
-                svc.lastStatsGenerationDate = new Date();
-                svc.nextStatsGenerationDate = moment(svc.lastStatsGenerationDate).add(STAT_GENERATION_INTERVAL_IN_MINUTES, 'minutes');
-                logger.info(`Scheduling future statistics generations for ${svc.nextStatsGenerationDate.format('L LTS')}`);
-                logger.info(`Regenerating every ${STAT_GENERATION_INTERVAL_IN_MINUTES} min(s) (${STAT_GENERATION_INTERVAL_IN_SECONDS} secs)`);
-                svc.statsInterval = setInterval(svc.generateHistoricalStatistics, STAT_GENERATION_INTERVAL_IN_MILLISECONDS);
-            })
-            .catch(error => {
-                logger.error(error);
-            });
     },
-    startPolling () {
-        svc.startPollingWithConfigs([
-            {
-                key           : 'topVolumeTo',
-                interval      : apiIntervals.exchangeInterval,
-                url           : ConfigService.getVolumeAPIUrl(),
-                requestsPerDay: ConfigService.getVolumeMaxRequestsPerDay(),
-                promise       : svc.getAndCacheTopVolumeTo
-            },
-            {
-                key           : 'exchange',
-                interval      : apiIntervals.exchangeInterval,
-                url           : ConfigService.getExchangesAPIURLs(),
-                requestsPerDay: ConfigService.getExchangesMaxRequestsPerDay(),
-                promise       : svc.getAndCacheExchangesInfo
-            },
-            {
-                key           : 'blockchain',
-                interval      : apiIntervals.blockchainInterval,
-                url           : ConfigService.getBlockchainAPIUrl(),
-                token         : ConfigService.getBlockchainAPIToken(),
-                requestsPerDay: ConfigService.getBlockchainAPIMaxRequestsPerDay(),
-                promise       : svc.getAndSaveBlockchainInfo
-            },
-            {
-                key           : 'price',
-                interval      : apiIntervals.priceInterval,
-                url           : ConfigService.getPriceAPIUrl(),
-                requestsPerDay: ConfigService.getPriceAPIMaxRequestsPerDay(),
-                promise       : svc.getAndSavePriceInfo
+    __attachCoinInfoToVolume (coinInfo, topVolumeTo) {
+        topVolumeTo.Data.forEach(coin => {
+            if (coin.ID !== -1) {
+                const info = coinInfo.find(coinInfo => coinInfo.Data.General.Id === coin.ID);
+                if (Maybe.of(() => info.Data.General).isJust()) {
+                    const { General } = info.Data;
+                    coin.info = {
+                        url         : General.Url,
+                        imageUrl    : General.ImageUrl,
+                        affiliateUrl: General.AffiliateUrl,
+                        twitter     : General.Twitter,
+                        description : General.Description
+                    };
+                }
             }
-        ]);
+        });
+        if (svc.cache.has(CACHE_KEY.TOP_VOLUME_TO)) {
+            svc.cache.delete(CACHE_KEY.TOP_VOLUME_TO);
+        }
+        logger.info(`CACHE: Caching ${CACHE_KEY.TOP_VOLUME_TO}`);
+        svc.cache.add(CACHE_KEY.TOP_VOLUME_TO, topVolumeTo);
     },
-    startPollingWithConfigs (configs) {
-        if (configs && configs.length > 0) {
-            configs.forEach((config, index) => {
-                if (config) {
-                    svc.startPollingWithConfig(config, index);
+    __generateCoinPromises (topVolumeTo) {
+        let coinPromises = [];
+        topVolumeTo.Data.forEach(coin => {
+            const { ID } = coin;
+            if (ID !== -1) {
+                coinPromises.push(
+                    DataAccessService.get(`${ConfigService.getCoinSnapshotAPIURL()}${ID}`)
+                );
+            }
+        });
+        return { promises: coinPromises, topVolumeTo };
+    },
+    __checkThresholdStatus (blockchainInfo) {
+        function __shouldSendAlert (maybeCount) {
+            return (!svc.lastAlertSent || moment().subtract(ConfigService.getSendAlertInterval(), 'minutes').isAfter(svc.lastAlertSent)) &&
+                maybeCount.isJust() &&
+                maybeCount.join() >= ConfigService.getPendingTxThreshold();
+        }
+        const maybeCount = Maybe.of(blockchainInfo.unconfirmed_count);
+        if (__shouldSendAlert(maybeCount)) {
+            return new Promise((resolve, reject) => {
+                MailerService
+                    .sendMessage(
+                        EMAIL_SUBJECT,
+                        EMAIL_MESSAGE(maybeCount.join())
+                    )
+                    .then(() => {
+                        svc.lastAlertSent = new Date();
+                        resolve();
+                    })
+                    .catch(error => {
+                        logger.error(error);
+                        reject(error);
+                    });
+            });
+        }
+    },
+    __cacheExchangesInfo (exchangeInfos) {
+        if (!exchangeInfos) return;
+        let exchangesPerPair = [];
+        exchangeInfos.forEach(exchangeInfo => {
+            const exchanges = Maybe.of(exchangeInfo).path('Data.Exchanges');
+            if (exchanges.isJust()) {
+                exchangesPerPair.push(exchanges.join());
+            }
+        });
+        if (svc.cache.has(CACHE_KEY.EXCHANGE_INFOS)) {
+            svc.cache.delete(CACHE_KEY.EXCHANGE_INFOS);
+        }
+        logger.info(`CACHE: Caching ${CACHE_KEY.EXCHANGE_INFOS}`);
+        svc.cache.add(CACHE_KEY.EXCHANGE_INFOS, exchangesPerPair);
+        return exchangeInfos;
+    },
+    __storeCoinInfo (exchangeInfos) {
+        if (!exchangeInfos) return;
+        let promise = null;
+        exchangeInfos.forEach(exchangeInfo => {
+            const coinInfo = Maybe.of(exchangeInfo).path('Data.CoinInfo');
+            if (coinInfo.isJust() && !promise) {
+                logger.info('COININFO: Storing coininfo');
+                promise = MongooseService.saveNewObject(coinInfoModel, coinInfo.join());
+            }
+        });
+        return promise;
+    },
+    __storePriceInfo (price) {
+        if (Maybe.of(price.RAW.ETH.BTC).isJust() &&
+            Maybe.of(price.RAW.ETH.USD).isJust()) {
+            return MongooseService.saveNewObject(priceModel, {
+                RAW: {
+                    ETH: {
+                        USD: {
+                            PRICE : Maybe.of(price.RAW.ETH.USD.PRICE).join(),
+                            MKTCAP: Maybe.of(price.RAW.ETH.USD.MKTCAP).join()
+                        },
+                        BTC: {
+                            PRICE: Maybe.of(price.RAW.ETH.BTC.PRICE).join()
+                        }
+                    }
                 }
             });
-            logger.info('************************************************');
         }
-    },
-    startPollingWithConfig (config, index = 0) {
-        if (!config.interval) {
-            const requestsPerSec = (60 * 60 * 24) / config.requestsPerDay;
-            logger.info('************************************************');
-            logger.info(`Starting ETH ${config.key} polling (Interval #${index + 1})`);
-            logger.info(`Using API @ ${config.url.toString()}`);
-            logger.info(`Maximum requests per day: ${config.requestsPerDay}`);
-            logger.info(`Polling interval: ${requestsPerSec} seconds`);
-            logger.info(`API Token: ${config.token || 'None'}`);
-            config.promise()
-                .then(() => {
-                    config.interval = setInterval(config.promise, requestsPerSec * 1000);
-                });
-        }
-    },
-    stopPolling () {
-        Object.keys(svc.apiIntervals).forEach(key => {
-            const interval = apiIntervals[key];
-            if (interval) {
-                logger.info(`Stopping ETH polling interval #${index + 1}`);
-                clearInterval(blockchainInterval);
-                blockchainInterval = undefined;
-            }
-        });
     }
 };
 

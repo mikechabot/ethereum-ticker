@@ -2,7 +2,6 @@ import express from 'express';
 import http from 'http';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import morgan from 'morgan';
 import bodyParser from 'body-parser';
 import _isString from 'lodash/isString';
 
@@ -13,41 +12,34 @@ const MAX_PAYLOAD_SIZE = '50mb';
 
 const StartupService = {
     startApp () {
-        logger.info('Starting xg-app-server');
         return new Promise((resolve, reject) => {
-            this.initConfiguration()
-                .then(this.configureMongoose)
-                .then(this.verifyDatabaseConnectivity)
-                .then(this.configureExpress)
+            this.__initConfiguration()
+                .then(this.__configureMongoose)
+                .then(this.__verifyDatabaseConnectivity)
+                .then(this.__configureExpress)
                 .then((application) => {
-                    logger.info('Startup complete');
                     resolve(application);
                 })
                 .catch(error => reject(error));
         });
     },
-    initConfiguration () {
+    __initConfiguration () {
         return new Promise((resolve, reject) => {
             try {
-                const appConfig = ConfigService.getConfig();
-                logger.info('Listing application configuration');
-                logger.info('=================================');
-                for (let prop in appConfig) {
-                    if (appConfig.hasOwnProperty(prop)) {
-                        logger.info(`${prop}: ${JSON.stringify(appConfig[prop])}`);
+                Object.keys(ConfigService).forEach(key => {
+                    const prop = ConfigService[key];
+                    if (typeof prop === 'function') {
+                        prop();
                     }
-                }
-                logger.info('=================================');
+                });
                 return resolve();
             } catch (error) {
                 return reject(error);
             }
         });
     },
-    configureMongoose () {
+    __configureMongoose () {
         return new Promise((resolve) => {
-            logger.info('Starting mongoose configuration');
-
             // Set Mongoose promise library
             mongoose.Promise = global.Promise;
 
@@ -56,22 +48,16 @@ const StartupService = {
                 { description: 'Domain Properties', path: '../mongoose/plugin/domain-properties' }
             ];
 
-            logger.info(`Configuring ${plugins.length} Mongoose plugins`);
             plugins.forEach(plugin => {
-                logger.info(`Attaching ${plugin.description} plugin`);
                 mongoose.plugin(require(plugin.path));
             });
 
-            logger.info('Importing Mongoose Schemas');
             require('../mongoose/schemas');
-
-            logger.info('Completed mongoose configuration');
             resolve();
         });
     },
-    verifyDatabaseConnectivity () {
+    __verifyDatabaseConnectivity () {
         const MONGO_URL = ConfigService.getMongoUrl();
-        logger.info(`Attempting connection to ${MONGO_URL}`);
         return new Promise((resolve, reject) => {
             mongoose
                 .connect(MONGO_URL, {useMongoClient: true})
@@ -87,13 +73,9 @@ const StartupService = {
                 );
         });
     },
-    configureExpress () {
+    __configureExpress () {
         return new Promise((resolve) => {
             const application = express();
-
-            // application.use(morgan('combined', {
-            //     stream: { write: str => logger.info(str) }
-            // }));
 
             const whitelist = ConfigService.getWhitelist();
 
@@ -148,25 +130,12 @@ const StartupService = {
                     ConfigService.getPort(),
                     () => {
                         logger.info(`Express started. Listening on ${ConfigService.getPort()}`);
-                        _startAPIService();
+                        resolve();
                     }
                 );
         });
     }
 };
-
-function _startAPIService () {
-    const EthereumAPIService = require('../api/services/ethereum-api-service').default;
-    logger.info('');
-    logger.info('************************************************');
-    logger.info('| Starting API polling in 5 seconds            |');
-    logger.info('************************************************');
-    logger.info('| Starting statistics generation in 10 seconds |');
-    logger.info('************************************************');
-    logger.info('');
-    setTimeout(EthereumAPIService.startPolling, 5000);
-    setTimeout(EthereumAPIService.generateHistoricalStatistics, 10000);
-}
 
 function _getMongoDbVersion () {
     return new Promise((resolve, reject) => {
@@ -175,7 +144,6 @@ function _getMongoDbVersion () {
             if (error) {
                 reject(error);
             } else {
-                logger.info(`Successfully connected to MongoDB v${info.version}`);
                 resolve();
             }
         });

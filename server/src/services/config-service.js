@@ -65,6 +65,9 @@ export default {
     },
     getVolumeMaxRequestsPerDay () {
         return instance.getRequiredProperty('api.topVolumeTo.maxRequestsPerDay');
+    },
+    getCoinSnapshotAPIURL () {
+        return instance.getRequiredProperty('api.coin.url');
     }
 };
 
