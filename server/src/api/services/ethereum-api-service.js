@@ -1,6 +1,5 @@
 import moment from 'moment';
 import Maybe from 'maybe-baby';
-import SortableMap from 'sortable-map';
 import _groupBy from 'lodash/groupBy';
 import _minBy from 'lodash/minBy';
 import _maxBy from 'lodash/maxBy';
@@ -10,12 +9,7 @@ import MongooseService from '../../services/mongoose-service';
 import ConfigService from '../../services/config-service';
 import logger from '../../logger/logger';
 import MailerService from '../../services/mailer-service';
-import {ALLOWED_HOURS_BACK, ALLOWED_TIME_BASIS} from '../../common/app-const';
-
-const EMAIL_SUBJECT = '*Blockchain Alert* ETH pending transactions crossed above threshold';
-const EMAIL_MESSAGE = function (pendingTxs) {
-    return `Pending transaction count: <strong style="color: red">${pendingTxs}</strong><br/>Configured threshold: <strong style="color: green">${ConfigService.getPendingTxThreshold()}</strong><br/><br/>This email was generated automatically by <a href="http://marketmovers.io">http://marketmovers.io</a>.`;
-};
+import CacheService from '../../services/cache-service';
 
 const { DOMAIN_PROPERTY, QUERY_PROPERTY } = MongooseService;
 
@@ -26,18 +20,29 @@ const coinInfoModel = MongooseService.MODELS.COIN_INFO;
 let currentEthUsdDelta = -1;
 let lastAlertSent;
 
-const CACHE_KEY = {
-    EXCHANGE_INFOS: 'exchangesInfos',
-    TOP_VOLUME_TO : 'topVolumeTo'
+const MOMENT_HOUR = 'hour';
+const MOMENT_MINUTE = 'minute';
+
+const DEFAULT = {
+    HOURS_BACK: 1,
+    TIME_BASIS: MOMENT_HOUR
 };
 
-const cache = new SortableMap();
+const CACHE_KEY = {
+    EXCHANGE_INFOS: 'exchangesInfos',
+    TOP_VOLUME_TO : 'topVolumeTo',
+    PRICE         : 'price',
+    BLOCKCHAIN    : 'blockchain'
+};
+
+const PENDING_TRANSACTION_LABEL = 'Pending transaction count';
+const CACHE_NOT_READY = 'CACHE: Cache not ready';
 
 function __generateParameters (hoursBack) {
     const params = {};
     if (hoursBack) {
         params[DOMAIN_PROPERTY.CREATED_DATE] = {
-            [QUERY_PROPERTY.GREATER_THAN_OR_EQUAL]: new Date(moment().subtract(hoursBack, 'hours').startOf('hour').toString())
+            [QUERY_PROPERTY.GREATER_THAN_OR_EQUAL]: new Date(moment().subtract(hoursBack, MOMENT_HOUR).startOf(MOMENT_HOUR).toString())
         };
     }
     return params;
@@ -45,7 +50,6 @@ function __generateParameters (hoursBack) {
 
 let svc = {};
 const EthereumAPIService = svc = {
-    cache,
     lastAlertSent,
     getBlockchainInfoFromAPI () {
         let url = ConfigService.getBlockchainAPIUrl();
@@ -69,10 +73,24 @@ const EthereumAPIService = svc = {
         return Promise.all(promises);
     },
     getCurrentExchangeInfoFromCache () {
-        return Promise.resolve(svc.cache.find('exchangesInfos'));
+        return Promise.resolve(CacheService.find(CACHE_KEY.EXCHANGE_INFOS));
     },
     getCurrentTopVolumeToFromCache () {
-        return Promise.resolve(svc.cache.find('topVolumeTo'));
+        return Promise.resolve(CacheService.find(CACHE_KEY.TOP_VOLUME_TO));
+    },
+    getHistoricalPriceInfoFromCache (hoursBack = DEFAULT.HOURS_BACK, timeBasis = DEFAULT.TIME_BASIS) {
+        return svc.getTimestampedDataFromCache(`${CACHE_KEY.PRICE}-${hoursBack}-${timeBasis}`);
+    },
+    getHistoricalBlockchainInfoFromCache (hoursBack = DEFAULT.HOURS_BACK, timeBasis = DEFAULT.TIME_BASIS) {
+        return svc.getTimestampedDataFromCache(`${CACHE_KEY.BLOCKCHAIN}-${hoursBack}-${timeBasis}`);
+    },
+    getTimestampedDataFromCache (cacheKey) {
+        if (CacheService.has(cacheKey)) {
+            const value = CacheService.find(cacheKey);
+            return Promise.resolve(value.data);
+        } else {
+            return Promise.reject(new Error(CACHE_NOT_READY));
+        }
     },
     getAndCacheExchangesAndCoinInfo () {
         return new Promise((resolve, reject) => {
@@ -94,7 +112,7 @@ const EthereumAPIService = svc = {
                     const { promises, topVolumeTo } = results;
                     Promise
                         .all(promises)
-                        .then(coinInfo => svc.__attachCoinInfoToVolume(coinInfo, topVolumeTo))
+                        .then(coinInfo => svc.__attachCoinInfosToVolume(coinInfo, topVolumeTo))
                         .then(resolve)
                         .catch(error => {
                             logger.error(error);
@@ -139,11 +157,8 @@ const EthereumAPIService = svc = {
                         [MongooseService.DOMAIN_PROPERTY.ID]: -1
                     }
                 })
-                .then(results => {
-                    const latest = results[0];
-                    latest.pendingTxDelta = latest.unconfirmed_count - (results[1] ? results[1].unconfirmed_count : 0);
-                    resolve(latest);
-                })
+                .then(svc.__generateBlockchainResponse)
+                .then(resolve)
                 .catch(error => {
                     logger.error(error);
                     reject(error);
@@ -167,31 +182,13 @@ const EthereumAPIService = svc = {
                 });
         });
     },
-    getHistoricalBlockchainInfoFromCache (hoursBack = 1, timeBasis = 'hour') {
-        const cacheKey = `blockchain-${hoursBack}-${timeBasis}`;
-        if (svc.cache.has(cacheKey)) {
-            const cached = svc.cache.find(cacheKey);
-            if (moment().subtract(ConfigService.getStatRegenerationInMinutes(), 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
-                logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
-                return Promise.resolve(cached.data);
-            } else {
-                logger.info(`CACHE: Cache outdated. (cacheKey: ${cacheKey})`);
-            }
-        } else {
-            logger.info(`CACHE: No cached value detected. (cacheKey: ${cacheKey})`);
-        }
-        return Promise.reject(new Error('CACHE: Cache not ready'));
-    },
-    generateHistoricalBlockchainStats (hoursBack = 1, timeBasis = 'hour', timeoutOptions) {
-        const cacheKey = `blockchain-${hoursBack}-${timeBasis}`;
+
+    generateHistoricalBlockchainStats (hoursBack = DEFAULT.HOURS_BACK, timeBasis = DEFAULT.TIME_BASIS, timeoutOptions) {
+        const cacheKey = `${CACHE_KEY.BLOCKCHAIN}-${hoursBack}-${timeBasis}`;
 
         const __generate = () => {
             return new Promise((resolve, reject) => {
-                if (svc.cache.has(cacheKey)) {
-                    logger.info(`CACHE: Purging historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
-                    svc.cache.delete(cacheKey);
-                }
-                logger.info(`CACHE: Generating historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                CacheService.deleteIfPresent(cacheKey);
                 MongooseService
                     .find(blockchainModel, {
                         params: __generateParameters(hoursBack),
@@ -199,11 +196,10 @@ const EthereumAPIService = svc = {
                             [MongooseService.DOMAIN_PROPERTY.ID]: 1
                         }
                     })
-                    .then(blockchainInfos => svc.normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
-                    .then(normalizedBlockchainInfos => svc.generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
+                    .then(blockchainInfos => svc.__normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
+                    .then(normalizedBlockchainInfos => svc.__generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
                     .then(historicalBlockchainInfo => {
-                        logger.info(`CACHE: Caching historical blockchain statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
-                        svc.cache.add(cacheKey, {
+                        CacheService.add(cacheKey, {
                             [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
                             data                          : historicalBlockchainInfo
                         });
@@ -222,16 +218,11 @@ const EthereumAPIService = svc = {
             setTimeout(__generate, timeoutOptions.outer * 1000);
         }
     },
-    generateHistoricalPriceStats (hoursBack = 1, timeBasis = 'hour', timeoutOptions) {
-        const cacheKey = `price-${hoursBack}-${timeBasis}`;
-
+    generateHistoricalPriceStats (hoursBack = DEFAULT.HOURS_BACK, timeBasis = DEFAULT.TIME_BASIS, timeoutOptions) {
+        const cacheKey = `${CACHE_KEY.PRICE}-${hoursBack}-${timeBasis}`;
         const __generate = () => {
             return new Promise((resolve, reject) => {
-                if (svc.cache.has(cacheKey)) {
-                    logger.info(`CACHE: Purging historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
-                    svc.cache.delete(cacheKey);
-                }
-                logger.info(`CACHE: Generating historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
+                CacheService.deleteIfPresent(cacheKey);
                 MongooseService
                     .find(priceModel, {
                         params: __generateParameters(hoursBack),
@@ -239,11 +230,10 @@ const EthereumAPIService = svc = {
                             [MongooseService.DOMAIN_PROPERTY.ID]: 1
                         }
                     })
-                    .then(prices => svc.normalizePricesByTimeBasis(prices, timeBasis))
-                    .then(normalizedPrices => svc.generateCandlestickDataFromNormalizedPrices(normalizedPrices))
+                    .then(prices => svc.__normalizePricesByTimeBasis(prices, timeBasis))
+                    .then(normalizedPrices => svc.__generateCandlestickDataFromNormalizedPrices(normalizedPrices))
                     .then(historicalPrices => {
-                        logger.info(`CACHE: Caching historical price statistics. (cacheKey=${cacheKey}, hoursBack=${hoursBack}, timeBasis=${timeBasis})`);
-                        svc.cache.add(cacheKey, {
+                        CacheService.add(cacheKey, {
                             [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
                             data                          : historicalPrices
                         });
@@ -262,7 +252,7 @@ const EthereumAPIService = svc = {
             setTimeout(__generate, timeoutOptions.outer * 1000);
         }
     },
-    normalizeBlockchainInfosByTimeBase (blockInfos, timeBasis = 'hour') {
+    __normalizeBlockchainInfosByTimeBase (blockInfos, timeBasis = DEFAULT.TIME_BASIS) {
         if (!blockInfos || blockInfos.length === 0) {
             return [];
         } else {
@@ -276,7 +266,7 @@ const EthereumAPIService = svc = {
             }).filter(info => info.y > 100);
         }
     },
-    normalizePricesByTimeBasis (prices, timeBasis = 'hour') {
+    __normalizePricesByTimeBasis (prices, timeBasis = DEFAULT.TIME_BASIS) {
         if (!prices || prices.length === 0) {
             return [];
         } else {
@@ -293,7 +283,7 @@ const EthereumAPIService = svc = {
             }).filter(price => !!price);
         }
     },
-    generateLineDataFromBlockchainInfos (normalizedBlockchainInfos) {
+    __generateLineDataFromBlockchainInfos (normalizedBlockchainInfos) {
         if (!normalizedBlockchainInfos || normalizedBlockchainInfos.length === 0) {
             return [];
         } else {
@@ -308,7 +298,7 @@ const EthereumAPIService = svc = {
             });
         }
     },
-    generateCandlestickDataFromNormalizedPrices (normalizedPrices) {
+    __generateCandlestickDataFromNormalizedPrices (normalizedPrices) {
         if (!normalizedPrices || normalizedPrices.length === 0) {
             return [];
         } else {
@@ -328,20 +318,11 @@ const EthereumAPIService = svc = {
             });
         }
     },
-    getHistoricalPriceInfoLastNDays (hoursBack = 1, timeBasis = 'hour') {
-        const cacheKey = `price-${hoursBack}-${timeBasis}`;
-        if (svc.cache.has(cacheKey)) {
-            const cached = svc.cache.find(cacheKey);
-            if (moment().subtract(ConfigService.getStatRegenerationInMinutes(), 'minutes').isBefore(cached[DOMAIN_PROPERTY.CREATED_DATE])) {
-                logger.info(`CACHE: Found valid cached data. (cacheKey: ${cacheKey})`);
-                return Promise.resolve(cached.data);
-            } else {
-                logger.info(`CACHE: Cache outdated. (cacheKey: ${cacheKey})`);
-            }
-        } else {
-            logger.info(`CACHE: No cached value detected. (cacheKey: ${cacheKey})`);
-        }
-        return Promise.reject(new Error('CACHE: Cache not ready'));
+    __generateBlockchainResponse (blockchainInfos) {
+        const current = blockchainInfos[0];
+        const previous = blockchainInfos[1];
+        current.pendingTxDelta = current.unconfirmed_count - previous.unconfirmed_count;
+        return current;
     },
     __generatePriceObjectResponse (prices) {
         if (prices) {
@@ -364,27 +345,24 @@ const EthereumAPIService = svc = {
             };
         }
     },
-    __attachCoinInfoToVolume (coinInfo, topVolumeTo) {
-        topVolumeTo.Data.forEach(coin => {
-            if (coin.ID !== -1) {
-                const info = coinInfo.find(coinInfo => coinInfo.Data.General.Id === coin.ID);
-                if (Maybe.of(() => info.Data.General).isJust()) {
-                    const { General } = info.Data;
-                    coin.info = {
-                        url         : General.Url,
-                        imageUrl    : General.ImageUrl,
-                        affiliateUrl: General.AffiliateUrl,
-                        twitter     : General.Twitter,
-                        description : General.Description
-                    };
-                }
+    __attachCoinInfosToVolume (coinInfo, topVolumeTo) {
+        topVolumeTo.Data.forEach(svc.__attachCoinInfoToVolume.bind(this, coinInfo, topVolumeTo));
+        CacheService.deleteAndAdd(CACHE_KEY.TOP_VOLUME_TO, topVolumeTo);
+    },
+    __attachCoinInfoToVolume (coinInfo, topVolumeTo, coin) {
+        if (coin.ID !== -1) {
+            const info = coinInfo.find(coinInfo => coinInfo.Data.General.Id === coin.ID);
+            if (Maybe.of(() => info.Data.General).isJust()) {
+                const { General } = info.Data;
+                coin.info = {
+                    url         : General.Url,
+                    imageUrl    : General.ImageUrl,
+                    affiliateUrl: General.AffiliateUrl,
+                    twitter     : General.Twitter,
+                    description : General.Description
+                };
             }
-        });
-        if (svc.cache.has(CACHE_KEY.TOP_VOLUME_TO)) {
-            svc.cache.delete(CACHE_KEY.TOP_VOLUME_TO);
         }
-        logger.info(`CACHE: Caching ${CACHE_KEY.TOP_VOLUME_TO}`);
-        svc.cache.add(CACHE_KEY.TOP_VOLUME_TO, topVolumeTo);
     },
     __generateCoinPromises (topVolumeTo) {
         let coinPromises = [];
@@ -400,7 +378,7 @@ const EthereumAPIService = svc = {
     },
     __checkThresholdStatus (blockchainInfo) {
         function __shouldSendAlert (maybeCount) {
-            return (!svc.lastAlertSent || moment().subtract(ConfigService.getSendAlertInterval(), 'minutes').isAfter(svc.lastAlertSent)) &&
+            return (!svc.lastAlertSent || moment().subtract(ConfigService.getSendAlertInterval(), MOMENT_MINUTE).isAfter(svc.lastAlertSent)) &&
                 maybeCount.isJust() &&
                 maybeCount.join() >= ConfigService.getPendingTxThreshold();
         }
@@ -408,9 +386,10 @@ const EthereumAPIService = svc = {
         if (__shouldSendAlert(maybeCount)) {
             return new Promise((resolve, reject) => {
                 MailerService
-                    .sendMessage(
-                        EMAIL_SUBJECT,
-                        EMAIL_MESSAGE(maybeCount.join())
+                    .generateThresholdMessage(
+                        PENDING_TRANSACTION_LABEL,
+                        ConfigService.getPendingTxThreshold(),
+                        maybeCount.join()
                     )
                     .then(() => {
                         svc.lastAlertSent = new Date();
@@ -425,30 +404,33 @@ const EthereumAPIService = svc = {
     },
     __cacheExchangesInfo (exchangeInfos) {
         if (!exchangeInfos) return;
+
         let exchangesPerPair = [];
-        exchangeInfos.forEach(exchangeInfo => {
+        const __getExchanges = (exchangeInfo) => {
             const exchanges = Maybe.of(exchangeInfo).path('Data.Exchanges');
             if (exchanges.isJust()) {
                 exchangesPerPair.push(exchanges.join());
             }
-        });
-        if (svc.cache.has(CACHE_KEY.EXCHANGE_INFOS)) {
-            svc.cache.delete(CACHE_KEY.EXCHANGE_INFOS);
-        }
-        logger.info(`CACHE: Caching ${CACHE_KEY.EXCHANGE_INFOS}`);
-        svc.cache.add(CACHE_KEY.EXCHANGE_INFOS, exchangesPerPair);
+        };
+
+        exchangeInfos.forEach(__getExchanges);
+        CacheService.deleteAndAdd(CACHE_KEY.EXCHANGE_INFOS, exchangesPerPair);
+
         return exchangeInfos;
     },
     __storeCoinInfo (exchangeInfos) {
         if (!exchangeInfos) return;
+
         let promise = null;
-        exchangeInfos.forEach(exchangeInfo => {
+        const _store = (exchangeInfo) => {
             const coinInfo = Maybe.of(exchangeInfo).path('Data.CoinInfo');
             if (coinInfo.isJust() && !promise) {
-                logger.info('COININFO: Storing coininfo');
                 promise = MongooseService.saveNewObject(coinInfoModel, coinInfo.join());
             }
-        });
+        };
+
+        exchangeInfos.forEach(_store);
+
         return promise;
     },
     __storePriceInfo (price) {

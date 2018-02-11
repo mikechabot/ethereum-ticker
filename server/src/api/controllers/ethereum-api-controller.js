@@ -67,7 +67,7 @@ const EthereumAPIController = {
         }
 
         EthereumAPIService
-            .getHistoricalPriceInfoLastNDays(hoursBack, timeBasis)
+            .getHistoricalPriceInfoFromCache(hoursBack, timeBasis)
             .then(data => response.json(data))
             .catch(error => next(error));
     }
