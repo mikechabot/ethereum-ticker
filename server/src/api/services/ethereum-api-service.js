@@ -38,6 +38,13 @@ const CACHE_KEY = {
 const PENDING_TRANSACTION_LABEL = 'Pending transaction count';
 const CACHE_NOT_READY = 'CACHE: Cache not ready';
 
+const PROPERTY = {
+    UNCONFIRMED_COUNT: 'unconfirmed_count',
+    RAW_USD_MKT_CAP  : 'RAW.ETH.USD.MKTCAP',
+    RAW_USD_PRICE    : 'RAW.ETH.USD.PRICE',
+    RAW_BTC_PRICE    : 'RAW.ETH.BTC.PRICE'
+};
+
 function __generateParameters (hoursBack) {
     const params = {};
     if (hoursBack) {
@@ -196,15 +203,9 @@ const EthereumAPIService = svc = {
                             [MongooseService.DOMAIN_PROPERTY.ID]: 1
                         }
                     })
-                    .then(blockchainInfos => svc.__normalizeBlockchainInfosByTimeBase(blockchainInfos, timeBasis))
+                    .then(blockchainInfos => svc.__normalizeDatasetByTimeBasis(blockchainInfos, timeBasis, PROPERTY.UNCONFIRMED_COUNT))
                     .then(normalizedBlockchainInfos => svc.__generateLineDataFromBlockchainInfos(normalizedBlockchainInfos, timeBasis))
-                    .then(historicalBlockchainInfo => {
-                        CacheService.add(cacheKey, {
-                            [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
-                            data                          : historicalBlockchainInfo
-                        });
-                        resolve(historicalBlockchainInfo);
-                    })
+                    .then(historicalBlockchainInfo => svc.__addTimestampedDataToCache(cacheKey, historicalBlockchainInfo))
                     .catch(error => {
                         logger.error(error);
                         reject(error);
@@ -230,15 +231,10 @@ const EthereumAPIService = svc = {
                             [MongooseService.DOMAIN_PROPERTY.ID]: 1
                         }
                     })
-                    .then(prices => svc.__normalizePricesByTimeBasis(prices, timeBasis))
+                    .then(prices => svc.__normalizeDatasetByTimeBasis(prices, timeBasis, PROPERTY.RAW_USD_PRICE))
                     .then(normalizedPrices => svc.__generateCandlestickDataFromNormalizedPrices(normalizedPrices))
-                    .then(historicalPrices => {
-                        CacheService.add(cacheKey, {
-                            [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
-                            data                          : historicalPrices
-                        });
-                        resolve(historicalPrices);
-                    })
+                    .then(historicalPrices => svc.__addTimestampedDataToCache(cacheKey, historicalPrices))
+                    .then(resolve)
                     .catch(error => {
                         logger.error(error);
                         reject(error);
@@ -252,36 +248,31 @@ const EthereumAPIService = svc = {
             setTimeout(__generate, timeoutOptions.outer * 1000);
         }
     },
-    __normalizeBlockchainInfosByTimeBase (blockInfos, timeBasis = DEFAULT.TIME_BASIS) {
-        if (!blockInfos || blockInfos.length === 0) {
-            return [];
-        } else {
-            return blockInfos.map(blockInfo => {
-                return {
-                    y                             : blockInfo.unconfirmed_count,
-                    x                             : moment(blockInfo[DOMAIN_PROPERTY.CREATED_DATE]).startOf(timeBasis),
-                    [DOMAIN_PROPERTY.ID]          : blockInfo[DOMAIN_PROPERTY.ID],
-                    [DOMAIN_PROPERTY.CREATED_DATE]: blockInfo[DOMAIN_PROPERTY.CREATED_DATE]
-                };
-            }).filter(info => info.y > 100);
-        }
+    __addTimestampedDataToCache (cacheKey, data) {
+        CacheService.add(cacheKey, {
+            [DOMAIN_PROPERTY.CREATED_DATE]: new Date(),
+            data
+        });
+        return data;
     },
-    __normalizePricesByTimeBasis (prices, timeBasis = DEFAULT.TIME_BASIS) {
-        if (!prices || prices.length === 0) {
+    __normalizeDatasetByTimeBasis (dataset, timeBasis, property) {
+        if (!dataset || dataset.length === 0) {
             return [];
-        } else {
-            return prices.map(price => {
-                if (Maybe.of(price.RAW.ETH.USD).isNothing()) {
-                    return null;
-                }
-                return {
-                    y                             : price.RAW.ETH.USD.PRICE,
-                    x                             : moment(price[DOMAIN_PROPERTY.CREATED_DATE]).startOf(timeBasis),
-                    [DOMAIN_PROPERTY.ID]          : price[DOMAIN_PROPERTY.ID],
-                    [DOMAIN_PROPERTY.CREATED_DATE]: price[DOMAIN_PROPERTY.CREATED_DATE]
-                };
-            }).filter(price => !!price);
         }
+        return dataset.map(data => {
+            const _data = Maybe.of(data);
+            const _value = _data.path(property);
+            if (_value.isNothing()) {
+                return null;
+            } else {
+                return {
+                    y                             : _value.join(),
+                    x                             : moment(_data.prop(DOMAIN_PROPERTY.CREATED_DATE).join()).startOf(timeBasis),
+                    [DOMAIN_PROPERTY.ID]          : _data.prop(DOMAIN_PROPERTY.ID).join(),
+                    [DOMAIN_PROPERTY.CREATED_DATE]: _data.prop(DOMAIN_PROPERTY.CREATED_DATE).join()
+                };
+            }
+        }).filter(data => !!data);
     },
     __generateLineDataFromBlockchainInfos (normalizedBlockchainInfos) {
         if (!normalizedBlockchainInfos || normalizedBlockchainInfos.length === 0) {
@@ -321,28 +312,29 @@ const EthereumAPIService = svc = {
     __generateBlockchainResponse (blockchainInfos) {
         const current = blockchainInfos[0];
         const previous = blockchainInfos[1];
-        current.pendingTxDelta = current.unconfirmed_count - previous.unconfirmed_count;
+        current.pendingTxDelta = current[PROPERTY.UNCONFIRMED_COUNT] - previous[PROPERTY.UNCONFIRMED_COUNT];
         return current;
     },
     __generatePriceObjectResponse (prices) {
         if (prices) {
-            const latestEthPrice = prices[0];
-            const prevEthPrice = prices[1];
+            const maybeNewPriceData = Maybe.of(prices[0]);
+            const maybeOldPriceData = Maybe.of(prices[1]);
 
-            const { ETH } = latestEthPrice.RAW;
-            const { BTC, USD} = ETH;
+            const newPrice = maybeNewPriceData.path(PROPERTY.RAW_USD_PRICE);
+            const oldPrice = maybeOldPriceData.path(PROPERTY.RAW_USD_PRICE);
 
-            const ethUsdDelta = (USD.PRICE - (prevEthPrice ? prevEthPrice.RAW.ETH.USD.PRICE : 0)).toFixed(2);
-            if (ethUsdDelta !== '0.00') {
-                currentEthUsdDelta = ethUsdDelta;
+            if (newPrice.isJust() && oldPrice.isJust()) {
+                const ethUsdDelta = (newPrice.join() - oldPrice.join()).toFixed(2);
+                if (ethUsdDelta !== '0.00') {
+                    currentEthUsdDelta = ethUsdDelta;
+                }
+                return {
+                    BTC      : maybeNewPriceData.path(PROPERTY.RAW_BTC_PRICE).join(),
+                    USD      : newPrice.join(),
+                    USD_delta: currentEthUsdDelta,
+                    MKTCAP   : maybeNewPriceData.path(PROPERTY.RAW_USD_MKT_CAP).join()
+                };
             }
-
-            return {
-                BTC      : Maybe.of(BTC.PRICE).orElse(-1).join(),
-                USD      : USD.PRICE,
-                USD_delta: currentEthUsdDelta,
-                MKTCAP   : USD.MKTCAP
-            };
         }
     },
     __attachCoinInfosToVolume (coinInfo, topVolumeTo) {
@@ -382,7 +374,7 @@ const EthereumAPIService = svc = {
                 maybeCount.isJust() &&
                 maybeCount.join() >= ConfigService.getPendingTxThreshold();
         }
-        const maybeCount = Maybe.of(blockchainInfo.unconfirmed_count);
+        const maybeCount = Maybe.of(blockchainInfo[PROPERTY.UNCONFIRMED_COUNT]);
         if (__shouldSendAlert(maybeCount)) {
             return new Promise((resolve, reject) => {
                 MailerService
