@@ -383,6 +383,7 @@ const EthereumAPIService = svc = {
                         ConfigService.getPendingTxThreshold(),
                         maybeCount.join()
                     )
+                    .then(MailerService.sendMessage)
                     .then(() => {
                         svc.lastAlertSent = new Date();
                         resolve();

@@ -18,16 +18,18 @@ const MailerService = svc = {
         };
     },
     generateThresholdMessage (label, threshold, count) {
-        return svc.generateMessage(
-            __generateThresholdSubject(label),
-            __generateThresholdBody(label, threshold, count)
+        return Promise.resolve(
+            svc.generateMessage(
+                __generateThresholdSubject(label),
+                __generateThresholdBody(label, threshold, count)
+            )
         );
     },
-    sendMessage (subject, message) {
+    sendMessage (message) {
         return new Promise((resolve, reject) => {
             return mailgun
                 .messages()
-                .send(svc.generateMessage(subject, message), (error, body) => {
+                .send(message, (error, body) => {
                     if (error) {
                         return reject(error);
                     } else {
